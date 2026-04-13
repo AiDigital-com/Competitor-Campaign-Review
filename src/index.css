@@ -1,0 +1,179 @@
+/* Global reset — theme variables come from applyTheme() */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: var(--font-size-base, 15px);
+  line-height: var(--line-height, 1.6);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.4s ease-in, color 0.4s ease-in;
+}
+
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+a { color: inherit; text-decoration: none; }
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: thin; }
+
+/* ── Sidebar ─────────────────────────────────────────
+   IMPORTANT: The DS uses aidl-sidebar prefix internally.
+   Apps must include these local .sidebar classes for the
+   custom sidebar component to render correctly.
+   ──────────────────────────────────────────────────── */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+.sidebar--collapsed {
+  width: 44px;
+  min-width: 44px;
+  align-items: center;
+  padding-top: 12px;
+}
+
+.sidebar__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  flex-shrink: 0;
+}
+
+.sidebar__toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.sidebar__toggle:hover { background: var(--surface2, var(--surface-2)); color: var(--text); }
+
+.sidebar__new-btn {
+  flex: 1;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  text-align: left;
+  transition: background 0.5s ease, color 0.5s ease;
+}
+.sidebar__new-btn:hover { background: var(--brand-green); color: var(--brand-blue); }
+
+.sidebar__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 16px;
+}
+
+.sidebar__empty {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 12px 8px;
+}
+
+.sidebar__group {
+  margin-bottom: 8px;
+}
+
+.sidebar__group-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 8px 4px;
+}
+
+/* ── Sidebar items ───────────────────────────────── */
+.sidebar__item-wrap {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  position: relative;
+}
+.sidebar__item-wrap--active { background: var(--accent-dim); border: 1px solid var(--accent-border); }
+.sidebar__item-wrap:hover .sidebar__delete { opacity: 1; }
+.sidebar__item-wrap:hover { background: var(--surface2, var(--surface-2)); }
+.sidebar__item-wrap--active:hover { background: var(--accent-dim); }
+
+.sidebar__item {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  text-align: left;
+  min-width: 0;
+}
+
+.sidebar__item-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.sidebar__item-brand {
+  font-size: 0.88rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.sidebar__item-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-left: 14px;
+}
+
+.sidebar__delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  opacity: 0;
+  padding: 4px 8px;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.sidebar__delete:hover { color: var(--error); opacity: 1; }
+
+/* ── Status dots ─────────────────────────────────── */
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.status-dot--chatting  { background: var(--accent); animation: pulse 2s infinite; }
+.status-dot--spinning  { background: #f6ad55; animation: pulse 1.2s infinite; }
+.status-dot--error     { background: var(--error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

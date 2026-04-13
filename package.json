@@ -1,0 +1,38 @@
+{
+  "name": "competitor-campaign-review",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@AiDigital-com/design-system": "^7.45.1",
+    "@clerk/backend": "^3.2.1",
+    "@clerk/react": "^6.1.1",
+    "@google/genai": "^1.46.0",
+    "@supabase/supabase-js": "^2.99.2",
+    "html2pdf.js": "^0.14.0",
+    "marked": "^15.0.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@netlify/functions": "^2.8.2",
+    "@types/node": "^24.12.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.56.1",
+    "vite": "^6.1.0"
+  }
+}
