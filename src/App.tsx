@@ -181,14 +181,18 @@ function AppContent({
     setDispatched(true)
     setActiveSessionId(sessionId)
 
-    // Update session record with brand name + job id
+    // Upsert session record with brand name + job id
+    // Uses upsert because useSessionPersistence may not have created the row yet
     if (supabase) {
-      await supabase.from(SESSION_TABLE).update({
+      await supabase.from(SESSION_TABLE).upsert({
+        id: sessionId,
+        user_id: userId,
         brand_name: intake.brand_domain,
         status: 'processing',
         job_id: newJobId,
         intake_summary: intake,
-      }).eq('id', sessionId)
+        deleted_by_user: false,
+      }, { onConflict: 'id' })
     }
 
     // Fire pipeline (background function — fire & forget)

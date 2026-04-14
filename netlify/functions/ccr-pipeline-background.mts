@@ -248,9 +248,9 @@ function buildNarrativeContext(
   brandData: CampaignData,
   competitors: CampaignData[],
 ): string {
-  const brandChannels = brandData.channels.map(c => `${c.name}: ${fmtM(c.impressions)} imps`).join(', ') || 'No channel data';
+  const brandChannels = (brandData.channels || []).map(c => `${c.name}: ${fmtM(c.impressions)} imps`).join(', ') || 'No channel data';
   const competitorSummaries = competitors.map(c =>
-    `${c.domain}: ${fmtM(c.totalImpressions)} imps, $${fmtM(c.totalSpend)} spend — channels: ${c.channels.map(ch => ch.name).join(', ') || 'none'}`
+    `${c.domain}: ${fmtM(c.totalImpressions)} imps, $${fmtM(c.totalSpend)} spend — channels: ${(c.channels || []).map(ch => ch.name).join(', ') || 'none'}`
   ).join('\n');
 
   return `Analyze the competitive advertising landscape for "${brand}" and provide strategic recommendations.
