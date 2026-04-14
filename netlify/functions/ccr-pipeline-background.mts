@@ -78,18 +78,15 @@ export default async (req: Request) => {
       console.warn('DataForSeo failed, continuing without search competitors:', err);
     }
 
-    // ── Step 2: BigQuery / AdClarity ─────────────────────────────────────────
+    // ── Step 2: AdClarity (BQ query → Supabase training → BQ scan) ────────
     await setStep('Fetching ad intelligence…');
     const allDomains = [brand_domain, ...competitorDomains].slice(0, 11); // brand + up to 10
     let adData: CampaignData[] = [];
-    if (process.env.GCP_PROJECT_ID && process.env.GOOGLE_CREDENTIALS) {
-      try {
-        adData = await getAdClarityData(allDomains);
-      } catch (err) {
-        console.warn('BigQuery failed:', err);
-      }
-    } else {
-      console.warn('GCP env vars not configured — skipping AdClarity queries');
+    try {
+      adData = await getAdClarityData(allDomains);
+      console.log(`AdClarity: ${adData.length} domains with data`);
+    } catch (err) {
+      console.warn('AdClarity cascade failed:', err);
     }
 
     // Build lookup map
