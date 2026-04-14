@@ -42,6 +42,17 @@ export default async (req: Request) => {
   const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const startTime = Date.now();
 
+  // Ensure session row exists (frontend upsert may fail due to RLS timing)
+  await supabase.from('ccr_sessions').upsert({
+    id: sessionId,
+    user_id: userId,
+    brand_name: brand_domain,
+    status: 'processing',
+    job_id: jobId,
+    intake_summary: intakeData,
+    deleted_by_user: false,
+  }, { onConflict: 'id' });
+
   // Immediately mark job as started so frontend sees activity
   await supabase.from('job_status').upsert({
     id: jobId,
