@@ -13,7 +13,14 @@ import { createClient as createSupabase } from '@supabase/supabase-js';
 import type { CampaignData } from '../../../src/lib/types.js';
 
 function createBqClient(): BigQuery {
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
+  // Credentials split across env vars to stay under Lambda 4KB limit.
+  // GCP_PRIVATE_KEY holds the PEM key, GCP_CLIENT_EMAIL the service account.
+  const credentials = process.env.GOOGLE_CREDENTIALS
+    ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
+    : {
+        client_email: process.env.GCP_CLIENT_EMAIL!,
+        private_key: process.env.GCP_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      };
   return new BigQuery({
     projectId: process.env.GCP_PROJECT_ID!,
     credentials,
