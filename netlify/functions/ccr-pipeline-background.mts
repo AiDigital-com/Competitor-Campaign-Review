@@ -177,6 +177,7 @@ export default async (req: Request) => {
 Write concise, actionable insights for marketing professionals.
 Format with markdown headers (##) and bullet points. Max 600 words.`,
       prompt: narrativeContext,
+      userParts: [],
       app: `${APP_NAME}:narrative`,
       userId: userId ?? undefined,
       maxTokens: 1024,
