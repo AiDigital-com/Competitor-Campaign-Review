@@ -18,8 +18,8 @@ function createClient(): BigQuery {
 
 function tableRef(): string {
   const project = process.env.GCP_PROJECT_ID!;
-  const dataset = process.env.ADCLARITY_DATASET || 'adclarity';
-  const table = process.env.ADCLARITY_TABLE_NAME || 'adclarity_sample_data';
+  const dataset = process.env.ADCLARITY_DATASET || 'adclarity_competitor_analysis';
+  const table = process.env.ADCLARITY_TABLE_NAME || 'adclarity_aws_monthly_12m_clean';
   return `\`${project}.${dataset}.${table}\``;
 }
 
@@ -30,6 +30,8 @@ function tableRef(): string {
 export async function getAdClarityData(domains: string[]): Promise<CampaignData[]> {
   const bq = createClient();
 
+  // COST SAFETY: Always filter by date to limit scanned data.
+  // adclarity_aws_monthly tables are large — never query without a date range.
   const query = `
     WITH deduped AS (
       SELECT
@@ -44,6 +46,7 @@ export async function getAdClarityData(domains: string[]): Promise<CampaignData[
         MAX(SPEND)               AS spend
       FROM ${tableRef()}
       WHERE LOWER(ADVERTISER_DOMAIN) IN UNNEST(@domains)
+        AND occurence_collectiondate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
       GROUP BY 1, 2, 3, 4, 5, 6, 7
     )
     SELECT
