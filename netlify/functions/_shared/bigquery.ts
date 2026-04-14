@@ -39,14 +39,16 @@ function tableRef(): string {
  * Cascade: SQL query → Supabase training data → BQ table scan.
  */
 export async function getAdClarityData(domains: string[]): Promise<CampaignData[]> {
-  // 1. Try SQL query (fastest, needs bigquery.jobUser)
-  try {
-    const result = await queryMode(domains);
-    if (result.length > 0) return result;
-  } catch (err: any) {
-    const msg = err?.message || '';
-    if (!msg.includes('bigquery.jobs.create') && !msg.includes('Access Denied')) throw err;
-    console.log('[AdClarity] Query mode blocked — trying Supabase training data');
+  const hasGcp = !!(process.env.GCP_PROJECT_ID && (process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_CREDENTIALS));
+
+  // 1. Try SQL query (fastest, needs bigquery.jobUser + GCP creds)
+  if (hasGcp) {
+    try {
+      const result = await queryMode(domains);
+      if (result.length > 0) return result;
+    } catch (err: any) {
+      console.log('[AdClarity] Query mode failed:', (err as Error).message?.substring(0, 120));
+    }
   }
 
   // 2. Try Supabase training data (fast, pre-cached)
@@ -60,9 +62,14 @@ export async function getAdClarityData(domains: string[]): Promise<CampaignData[
     console.log('[AdClarity] Supabase training mode failed:', (err as Error).message);
   }
 
-  // 3. Fall back to BQ table scan (slowest, Data Viewer only)
-  console.log('[AdClarity] Falling back to BQ table scan');
-  return trainingMode(domains);
+  // 3. Fall back to BQ table scan (slowest, needs GCP creds)
+  if (hasGcp) {
+    console.log('[AdClarity] Falling back to BQ table scan');
+    return trainingMode(domains);
+  }
+
+  console.log('[AdClarity] No GCP creds and no training data — returning empty');
+  return [];
 }
 
 // ── Query mode (full SQL — needs bigquery.jobUser) ──────────────────────────
