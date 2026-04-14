@@ -270,7 +270,7 @@ BRAND: ${brand}
 - Total Impressions: ${fmtM(brandData.totalImpressions)}
 - Estimated Spend: $${fmtM(brandData.totalSpend)}
 - Active Channels: ${brandChannels}
-- Active Publishers: ${brandData.publishers.slice(0, 5).map(p => p.domain).join(', ') || 'None found'}
+- Active Publishers: ${(brandData.publishers || []).slice(0, 5).map(p => p.domain).join(', ') || 'None found'}
 
 TOP COMPETITORS:
 ${competitorSummaries || 'No competitor ad data found in AdClarity dataset.'}
