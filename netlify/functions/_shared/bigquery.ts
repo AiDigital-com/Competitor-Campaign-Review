@@ -1,18 +1,18 @@
 /**
  * BigQuery / AdClarity helper.
  *
- * Two modes:
+ * Three modes (cascading fallback):
  * 1. Query mode (requires bigquery.jobUser) — runs SQL against the raw table.
- * 2. Training mode (Data Viewer only) — reads pre-aggregated summary tables
- *    via getRows() with client-side domain filtering. Slower but works without
- *    query execution permission.
+ * 2. Supabase training mode — reads cached AdClarity data from ccr_training_data.
+ * 3. BQ scan mode (Data Viewer only) — scans pre-aggregated summary tables.
  *
- * Tries query mode first, falls back to training mode automatically.
+ * Tries query → Supabase training → BQ scan.
  */
 import { BigQuery } from '@google-cloud/bigquery';
+import { createClient as createSupabase } from '@supabase/supabase-js';
 import type { CampaignData } from '../../../src/lib/types.js';
 
-function createClient(): BigQuery {
+function createBqClient(): BigQuery {
   const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
   return new BigQuery({
     projectId: process.env.GCP_PROJECT_ID!,
@@ -29,25 +29,39 @@ function tableRef(): string {
 
 /**
  * Fetch AdClarity campaign data for a set of domains.
- * Tries SQL query first; falls back to summary-table scan if permissions block.
+ * Cascade: SQL query → Supabase training data → BQ table scan.
  */
 export async function getAdClarityData(domains: string[]): Promise<CampaignData[]> {
+  // 1. Try SQL query (fastest, needs bigquery.jobUser)
   try {
-    return await queryMode(domains);
+    const result = await queryMode(domains);
+    if (result.length > 0) return result;
   } catch (err: any) {
     const msg = err?.message || '';
-    if (msg.includes('bigquery.jobs.create') || msg.includes('Access Denied')) {
-      console.log('[AdClarity] Query mode blocked — falling back to training mode');
-      return trainingMode(domains);
-    }
-    throw err;
+    if (!msg.includes('bigquery.jobs.create') && !msg.includes('Access Denied')) throw err;
+    console.log('[AdClarity] Query mode blocked — trying Supabase training data');
   }
+
+  // 2. Try Supabase training data (fast, pre-cached)
+  try {
+    const result = await supabaseTrainingMode(domains);
+    if (result.length > 0) {
+      console.log(`[AdClarity] Supabase training data: ${result.length} domains`);
+      return result;
+    }
+  } catch (err) {
+    console.log('[AdClarity] Supabase training mode failed:', (err as Error).message);
+  }
+
+  // 3. Fall back to BQ table scan (slowest, Data Viewer only)
+  console.log('[AdClarity] Falling back to BQ table scan');
+  return trainingMode(domains);
 }
 
 // ── Query mode (full SQL — needs bigquery.jobUser) ──────────────────────────
 
 async function queryMode(domains: string[]): Promise<CampaignData[]> {
-  const bq = createClient();
+  const bq = createBqClient();
 
   // COST SAFETY: Always filter by date to limit scanned data.
   const query = `
@@ -86,10 +100,70 @@ async function queryMode(domains: string[]): Promise<CampaignData[]> {
   return buildCampaignData(rows);
 }
 
-// ── Training mode (getRows scan — Data Viewer only) ─────────────────────────
+// ── Supabase training mode (cached AdClarity data) ──────────────────────────
+
+async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> {
+  const sb = createSupabase(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+  const lowerDomains = domains.map(d => d.toLowerCase());
+
+  const { data: rows, error } = await sb
+    .from('ccr_training_data')
+    .select('advertiser_domain, data_type, data')
+    .in('advertiser_domain', lowerDomains);
+
+  if (error) throw new Error(`Supabase training query failed: ${error.message}`);
+  if (!rows || rows.length === 0) return [];
+
+  // Group by domain
+  const byDomain = new Map<string, Record<string, any>>();
+  for (const row of rows) {
+    if (!byDomain.has(row.advertiser_domain)) byDomain.set(row.advertiser_domain, {});
+    byDomain.get(row.advertiser_domain)![row.data_type] = row.data;
+  }
+
+  return Array.from(byDomain.entries()).map(([domain, types]) => {
+    const s = types.summary || {};
+    const imp = Number(s.impressions) || 0;
+    const spend = Number(s.spend) || 0;
+    const total = imp || 1;
+
+    const channels: { name: string; impressions: number; spend: number }[] = [];
+    const displayImp = Number(s.display_impressions) || 0;
+    const videoImp = Number(s.video_impressions) || 0;
+    const socialImp = Number(s.social_impressions) || 0;
+    const ctvImp = Number(s.ctv_impressions) || 0;
+    if (displayImp) channels.push({ name: 'Display', impressions: displayImp, spend: Math.round(spend * displayImp / total) });
+    if (videoImp) channels.push({ name: 'Video', impressions: videoImp, spend: Math.round(spend * videoImp / total) });
+    if (socialImp) channels.push({ name: 'Social', impressions: socialImp, spend: Math.round(spend * socialImp / total) });
+    if (ctvImp) channels.push({ name: 'CTV', impressions: ctvImp, spend: Math.round(spend * ctvImp / total) });
+    channels.sort((a, b) => b.impressions - a.impressions);
+
+    const pubs = Array.isArray(types.publishers) ? types.publishers : [];
+    const crvs = Array.isArray(types.creatives) ? types.creatives : [];
+
+    return {
+      domain,
+      totalImpressions: imp,
+      totalSpend: spend,
+      channels,
+      publishers: pubs
+        .map((r: any) => ({ domain: r.publisher_group || r.domain || 'Unknown', impressions: Number(r.impressions) || 0, spend: Number(r.spend) || 0 }))
+        .sort((a: any, b: any) => b.impressions - a.impressions)
+        .slice(0, 10),
+      creatives: crvs
+        .map((r: any) => ({ id: String(r.creative_id || ''), url: r.creative_url_supplier || r.url || '', mimeType: r.creative_mime_type || '', channelName: '', firstSeen: r.creative_first_seen || '' }))
+        .slice(0, 20),
+    };
+  }).filter(d => d.totalImpressions > 0);
+}
+
+// ── BQ scan mode (getRows scan — Data Viewer only, slowest) ─────────────────
 
 async function trainingMode(domains: string[]): Promise<CampaignData[]> {
-  const bq = createClient();
+  const bq = createBqClient();
   const ds = bq.dataset(process.env.ADCLARITY_DATASET || 'adclarity_competitor_analysis');
   const domainSet = new Set(domains.map(d => d.toLowerCase()));
 
