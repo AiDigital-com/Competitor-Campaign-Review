@@ -2,13 +2,6 @@
    Design system provides base styles via style.css.
    All colors via CSS variables — never hardcoded. */
 
-/* ── Upload zone (pre-dispatch) ─────────────────────────────────────────── */
-.ccr-upload-zone {
-  padding: 0 1.5rem 1rem;
-  max-width: 640px;
-  margin: 0 auto;
-}
-
 /* ── Pipeline progress ───────────────────────────────────────────────────── */
 .ccr-progress {
   display: flex;
