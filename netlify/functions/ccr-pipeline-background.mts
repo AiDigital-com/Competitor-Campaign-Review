@@ -245,9 +245,11 @@ Format with markdown headers (##) and bullet points. Max 600 words.`,
       duration_ms: Date.now() - startTime,
     });
 
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error ? err.stack : undefined;
     await supabase.from('job_status').update({
       status: 'error',
-      error: err instanceof Error ? err.message : String(err),
+      error: `${errMsg}\n---STACK---\n${errStack ?? 'no stack'}`,
       updated_at: new Date().toISOString(),
     }).eq('id', jobId);
 
