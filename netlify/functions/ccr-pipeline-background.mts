@@ -157,8 +157,20 @@ export default async (req: Request) => {
     // ── Step 4: LLM narrative ────────────────────────────────────────────────
     await setStep('Generating strategic analysis…');
 
+    console.log('[Step 4] brandData keys:', Object.keys(brandData));
+    console.log('[Step 4] brandData.channels:', JSON.stringify(brandData.channels)?.slice(0, 200));
+    console.log('[Step 4] brandData.publishers:', JSON.stringify(brandData.publishers)?.slice(0, 200));
+    console.log('[Step 4] competitors count:', competitorsData.length);
+    competitorsData.forEach((c, i) => {
+      console.log(`[Step 4] competitor[${i}] ${c.domain} keys:`, Object.keys(c), 'channels:', Array.isArray(c.channels), 'publishers:', Array.isArray(c.publishers));
+    });
+
     const narrativeContext = buildNarrativeContext(brand_domain, brandData, competitorsData);
-    const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'analysis', { supabase });
+    console.log('[Step 4] narrativeContext built OK, length:', narrativeContext.length);
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    console.log('[Step 4] GEMINI_API_KEY present:', !!apiKey);
+    const llm = createLLMProvider('gemini', apiKey!, 'analysis', { supabase });
 
     const narrativeResult = await llm.generateContent({
       system: `You are a competitive intelligence analyst specializing in digital advertising strategy.
@@ -169,15 +181,16 @@ Format with markdown headers (##) and bullet points. Max 600 words.`,
       userId: userId ?? undefined,
       maxTokens: 1024,
     });
+    console.log('[Step 4] LLM response received, text length:', narrativeResult.text?.length);
 
     log.info('ccr-pipeline.narrative', {
       function_name: 'ccr-pipeline-background',
       user_id: userId,
       ai_provider: llm.provider,
       ai_model: llm.model,
-      ai_input_tokens: narrativeResult.usage.inputTokens,
-      ai_output_tokens: narrativeResult.usage.outputTokens,
-      ai_total_tokens: narrativeResult.usage.totalTokens,
+      ai_input_tokens: narrativeResult.usage?.inputTokens,
+      ai_output_tokens: narrativeResult.usage?.outputTokens,
+      ai_total_tokens: narrativeResult.usage?.totalTokens,
     });
 
     // ── Step 5: Save report ──────────────────────────────────────────────────
