@@ -1,23 +1,37 @@
 /**
  * Competitor Campaign Review (CCR)
  *
- * Standard chat-based audit app pattern.
- * Backend: Netlify functions (orchestrator + background agents)
- * Data: ccr_sessions Supabase table
+ * Flow:
+ * 1. User uploads image or types a URL in chat.
+ * 2. Orchestrator identifies the brand domain and dispatches.
+ * 3. ccr-pipeline-background runs (DataForSeo → BigQuery → Firecrawl → LLM).
+ * 4. Frontend watches job_status via useJobStatus (Realtime).
+ * 5. On complete, CcrReport renders the side-by-side comparison.
  */
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react'
-import { AppShell, ChatPanel, Sidebar, useJobStatus, useSessionPersistence } from '@AiDigital-com/design-system'
+import {
+  AppShell,
+  ChatPanel,
+  Sidebar,
+  UploadZone,
+  useOrchestrator,
+  useFileUpload,
+  useJobStatus,
+  useSessionPersistence,
+} from '@AiDigital-com/design-system'
 import type { SupabaseClient, SidebarItem } from '@AiDigital-com/design-system'
 import { createClient } from '@supabase/supabase-js'
 import { SignIn, UserButton, useAuth } from '@clerk/react'
+import { CcrReport } from './components/CcrReport'
+import type { CcrReportData, CcrIntake } from './lib/types'
 import './App.css'
 
 // ── App Config ────────────────────────────────────────────────────────────────
-const APP_NAME = 'competitor-campaign-review' // tool ID for access control + logging
-const APP_TITLE = 'Competitor Campaign Review' // shown in header
-const SESSION_TABLE = 'ccr_sessions'          // Supabase table name
-const TITLE_FIELD = 'brand_name'              // column used for sidebar item labels
-const ACTIVITY_LABEL = 'Review'              // "Audit" | "Session" | "Scan" | "Review"
+const APP_NAME = 'competitor-campaign-review'
+const APP_TITLE = 'Competitor Campaign Review'
+const SESSION_TABLE = 'ccr_sessions'
+const TITLE_FIELD = 'brand_name'
+const ACTIVITY_LABEL = 'Review'
 
 const supabaseConfig = import.meta.env.VITE_SUPABASE_URL ? {
   url: import.meta.env.VITE_SUPABASE_URL as string,
@@ -25,7 +39,6 @@ const supabaseConfig = import.meta.env.VITE_SUPABASE_URL ? {
   createClient: createClient as any,
 } : undefined
 
-// ── Sidebar item type ────────────────────────────────────────────────────────
 interface AppSession extends SidebarItem {
   title: string;
 }
@@ -33,14 +46,12 @@ interface AppSession extends SidebarItem {
 export default function App() {
   const { userId, getToken } = useAuth()
 
-  // Sidebar state lifted here so sidebar + content can share it
   const [sidebarItems, setSidebarItems] = useState<AppSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [sidebarSupabase, setSidebarSupabase] = useState<SupabaseClient | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Load sidebar sessions
   useEffect(() => {
     if (!sidebarSupabase) return
     sidebarSupabase.from(SESSION_TABLE)
@@ -58,7 +69,6 @@ export default function App() {
       })
   }, [refreshKey, sidebarSupabase])
 
-  // Handlers bridged to AppContent via ref
   const handlersRef = useRef<{
     onSelect: (id: string) => void
     onNew: () => void
@@ -128,23 +138,101 @@ function AppContent({
   activeSessionId, setActiveSessionId, setLoadingId, setRefreshKey,
   handlersRef, setSidebarSupabase,
 }: AppContentProps) {
-  const [messages, setMessages] = useState<any[]>([])
-  const [streaming, setStreaming] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [reportData, setReportData] = useState<CcrReportData | null>(null)
+  const [dispatched, setDispatched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Expose supabase to sidebar
-  useEffect(() => { setSidebarSupabase(supabase); }, [supabase, setSidebarSupabase])
+  useEffect(() => { setSidebarSupabase(supabase) }, [supabase, setSidebarSupabase])
 
-  // Session persistence — MUST pass all 4 args: (supabase, authFetch, userId, config)
+  // Session persistence
   const session = useSessionPersistence(supabase, authFetch, userId, {
     table: SESSION_TABLE,
     app: APP_NAME,
     titleField: TITLE_FIELD,
     mergeConfig: { objectFields: ['intake_summary'] },
-    defaultFields: { status: 'chatting' },
+    defaultFields: { status: 'chatting', deleted_by_user: false },
     mergeEndpoint: '/.netlify/functions/save-session',
     sessionsEndpoint: '/.netlify/functions/get-sessions',
   })
+
+  // Image upload — local base64 only (no Supabase storage needed)
+  const imageUpload = useFileUpload<{ base64: string; mimeType: string }>(
+    async (file: File) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      return { base64, mimeType: file.type }
+    }
+  )
+
+  // Dispatch handler — fires when orchestrator emits 'competitor_dispatch'
+  const handleDispatch = useCallback(async (
+    data: unknown,
+    sessionId: string,
+  ) => {
+    const intake = data as CcrIntake
+    const newJobId = crypto.randomUUID()
+    setJobId(newJobId)
+    setDispatched(true)
+    setActiveSessionId(sessionId)
+
+    // Update session record with brand name + job id
+    if (supabase) {
+      await supabase.from(SESSION_TABLE).update({
+        brand_name: intake.brand_domain,
+        status: 'processing',
+        job_id: newJobId,
+        intake_summary: intake,
+      }).eq('id', sessionId)
+    }
+
+    // Fire pipeline (background function — fire & forget)
+    authFetch('/.netlify/functions/ccr-pipeline-background', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        jobId: newJobId,
+        intakeData: intake,
+        userId,
+      }),
+    }).catch(err => console.error('Pipeline launch error:', err))
+
+    setRefreshKey(k => k + 1)
+  }, [supabase, userId, authFetch, setActiveSessionId, setRefreshKey])
+
+  // SSE chat orchestrator
+  const orchestrator = useOrchestrator(getToken, supabase, handleDispatch, {
+    tableName: SESSION_TABLE,
+    titleField: TITLE_FIELD,
+    dispatchEventType: 'competitor_dispatch',
+    dispatchDataKey: 'intakeSummary',
+    sessionInsertFields: { status: 'chatting', deleted_by_user: false },
+    onSessionCreated: () => setRefreshKey(k => k + 1),
+    endpoint: '/.netlify/functions/orchestrator',
+  })
+
+  // Watch pipeline progress via Supabase Realtime
+  const jobStatus = useJobStatus(supabase, jobId)
+
+  // Parse report when pipeline completes
+  useEffect(() => {
+    if (jobStatus?.status === 'complete' && jobStatus.report && !reportData) {
+      try {
+        setReportData(JSON.parse(jobStatus.report))
+      } catch (err) {
+        console.error('Failed to parse report:', err)
+        setError('Failed to parse report data.')
+      }
+    }
+    if (jobStatus?.status === 'error') {
+      setError(jobStatus.error ?? 'Pipeline failed. Please try again.')
+    }
+  }, [jobStatus, reportData])
 
   // Wire sidebar handlers
   useEffect(() => {
@@ -157,48 +245,109 @@ function AppContent({
         if (!data) return
         session.loadSession(id)
         setActiveSessionId(id)
-        if (data.messages) setMessages(data.messages)
+        orchestrator.reset()
+        setDispatched(false)
+        setJobId(null)
+        setReportData(null)
+        setError(null)
+        // Restore messages if available
+        if (data.messages) {
+          // Messages are restored via session — orchestrator reset handles state
+        }
+        // If session has a completed report, show it
+        if (data.report_data) {
+          setReportData(data.report_data as CcrReportData)
+          setDispatched(true)
+        } else if (data.job_id && data.status === 'processing') {
+          setJobId(data.job_id)
+          setDispatched(true)
+        }
       },
       onNew: () => {
+        orchestrator.reset()
         session.newSession()
-        setMessages([])
         setActiveSessionId(null)
+        setDispatched(false)
+        setJobId(null)
+        setReportData(null)
         setError(null)
+        imageUpload.clear()
       },
       onDelete: async (id: string) => {
         session.deleteSession(id)
         setRefreshKey(k => k + 1)
+        if (id === activeSessionId) {
+          orchestrator.reset()
+          setActiveSessionId(null)
+          setDispatched(false)
+          setJobId(null)
+          setReportData(null)
+          setError(null)
+        }
       },
     }
-  }, [supabase, session, setActiveSessionId, setLoadingId, setRefreshKey])
+  }, [supabase, session, orchestrator, imageUpload, activeSessionId, setActiveSessionId, setLoadingId, setRefreshKey])
 
-  // TODO: Replace with SSE orchestrator hook (see useOrchestrator in NM/PE/LRR)
-  async function handleSend(text: string) {
-    const userMsg = { id: crypto.randomUUID(), role: 'user' as const, content: text }
-    setMessages(prev => [...prev, userMsg])
-    session.addMessage(userMsg)
-    setStreaming(true)
+  // ── Send handler ──────────────────────────────────────────────────────────
+  const handleSend = useCallback(async (text: string) => {
+    const asset = imageUpload.result
+      ? { imageBase64: imageUpload.result.base64, imageMimeType: imageUpload.result.mimeType }
+      : undefined
+    imageUpload.clear()
+    await orchestrator.sendMessage(text, asset)
+  }, [orchestrator, imageUpload])
 
-    // TODO: Wire up SSE streaming to /.netlify/functions/orchestrator
-    setTimeout(() => {
-      const reply = { id: crypto.randomUUID(), role: 'assistant' as const, content: 'Placeholder — wire your orchestrator.' }
-      setMessages(prev => [...prev, reply])
-      session.addMessage(reply)
-      setStreaming(false)
-    }, 1000)
-  }
+  // ── Progress message ──────────────────────────────────────────────────────
+  const progressStep = jobStatus?.meta?.current_step as string | undefined
 
   return (
     <>
+      {/* Pre-dispatch: show upload zone for images */}
+      {!dispatched && orchestrator.messages.length === 0 && (
+        <div className="ccr-upload-zone">
+          <UploadZone
+            onFile={(file) => imageUpload.upload(file)}
+            onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
+            onClear={imageUpload.clear}
+            preview={imageUpload.previewUrl}
+            uploading={imageUpload.uploading}
+            error={imageUpload.error}
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            fileLabel="Drop a campaign image or enter a URL"
+          />
+        </div>
+      )}
+
       <ChatPanel
-        messages={messages}
-        streaming={streaming}
-        error={error}
+        messages={orchestrator.messages}
+        streaming={orchestrator.streaming}
+        error={error ?? orchestrator.error}
         onSend={handleSend}
         welcomeTitle="Competitor Campaign Review"
-        welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Enter a brand or campaign to begin."
-        placeholder="Tell me which competitor or campaign to review..."
+        welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
+        placeholder={
+          imageUpload.result
+            ? 'Image ready — press enter to analyze…'
+            : 'Enter a brand URL or describe the campaign…'
+        }
       />
+
+      {/* Post-dispatch: pipeline progress */}
+      {dispatched && !reportData && (
+        <div className="ccr-progress">
+          <div className="ccr-progress__spinner" />
+          <p className="ccr-progress__step">
+            {progressStep ?? 'Starting analysis…'}
+          </p>
+        </div>
+      )}
+
+      {/* Report */}
+      {reportData && (
+        <div className="ccr-report-wrapper">
+          <CcrReport data={reportData} />
+        </div>
+      )}
     </>
   )
 }
