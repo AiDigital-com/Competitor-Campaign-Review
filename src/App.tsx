@@ -289,12 +289,12 @@ function AppContent({
   }, [supabase, session, orchestrator, imageUpload, activeSessionId, setActiveSessionId, setLoadingId, setRefreshKey])
 
   // ── Send handler ──────────────────────────────────────────────────────────
-  const handleSend = useCallback(async (text: string) => {
-    const asset = imageUpload.result
-      ? { imageBase64: imageUpload.result.base64, imageMimeType: imageUpload.result.mimeType }
+  const handleSend = useCallback(async (text: string, asset: { base64: string; mimeType: string } | null) => {
+    const sendAsset = asset
+      ? { imageBase64: asset.base64, imageMimeType: asset.mimeType }
       : undefined
     imageUpload.clear()
-    await orchestrator.sendMessage(text, asset)
+    await orchestrator.sendMessage(text, sendAsset)
   }, [orchestrator, imageUpload])
 
   // ── Progress message ──────────────────────────────────────────────────────
@@ -302,9 +302,13 @@ function AppContent({
 
   return (
     <>
-      {/* Pre-dispatch: show upload zone for images */}
-      {!dispatched && orchestrator.messages.length === 0 && (
-        <div className="ccr-upload-zone">
+      <ChatPanel
+        messages={orchestrator.messages}
+        streaming={orchestrator.streaming}
+        error={error ?? orchestrator.error}
+        onSend={handleSend}
+        asset={imageUpload.result}
+        inputPrefix={!dispatched ? (
           <UploadZone
             onFile={(file) => imageUpload.upload(file)}
             onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
@@ -315,14 +319,7 @@ function AppContent({
             accept="image/jpeg,image/png,image/webp,image/gif"
             fileLabel="Drop a campaign image or enter a URL"
           />
-        </div>
-      )}
-
-      <ChatPanel
-        messages={orchestrator.messages}
-        streaming={orchestrator.streaming}
-        error={error ?? orchestrator.error}
-        onSend={handleSend}
+        ) : undefined}
         welcomeTitle="Competitor Campaign Review"
         welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
         placeholder={
