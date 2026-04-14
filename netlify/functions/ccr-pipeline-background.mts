@@ -176,8 +176,7 @@ export default async (req: Request) => {
       system: `You are a competitive intelligence analyst specializing in digital advertising strategy.
 Write concise, actionable insights for marketing professionals.
 Format with markdown headers (##) and bullet points. Max 600 words.`,
-      prompt: narrativeContext,
-      userParts: [],
+      userParts: [{ text: narrativeContext }],
       app: `${APP_NAME}:narrative`,
       userId: userId ?? undefined,
       maxTokens: 1024,
