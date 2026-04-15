@@ -153,6 +153,19 @@ export function CcrReport({ data }: Props) {
         </div>
       </ReportBlock>
 
+      {/* ── Action Items (below exec summary for consistency) ────── */}
+      <SectionDivider label="Recommended Actions" />
+      <ReportBlock
+        status={hasInsights ? 'ready' : 'loading'}
+        loadingLabel="Generating recommendations…"
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+          <ActionColumn title="Creatives" items={data.insights?.creativeActions || []} />
+          <ActionColumn title="Spending" items={data.insights?.spendingActions || []} />
+          <ActionColumn title="Channels" items={data.insights?.channelActions || []} />
+        </div>
+      </ReportBlock>
+
       {/* ── Comparison Table ───────────────────────────────────────── */}
       <SectionDivider label={isFiltered ? 'Campaign Comparison (Filtered)' : 'Campaign Comparison'} />
       <ReportBlock
@@ -249,19 +262,6 @@ export function CcrReport({ data }: Props) {
             </div>
           );
         })}
-      </ReportBlock>
-
-      {/* ── Action Items ──────────────────────────────────────────── */}
-      <SectionDivider label="Recommended Actions" />
-      <ReportBlock
-        status={hasInsights ? 'ready' : 'loading'}
-        loadingLabel="Generating recommendations…"
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-          <ActionColumn title="Creatives" items={data.insights?.creativeActions || []} />
-          <ActionColumn title="Spending" items={data.insights?.spendingActions || []} />
-          <ActionColumn title="Channels" items={data.insights?.channelActions || []} />
-        </div>
       </ReportBlock>
 
       {/* ── Fallback narrative ────────────────────────────────────── */}
