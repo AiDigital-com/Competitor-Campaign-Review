@@ -19,14 +19,23 @@ function getSupabase() {
 }
 
 function useBQ(): boolean {
-  return !!(process.env.GCP_PID && (process.env.GCP_PK || process.env.GOOGLE_CREDENTIALS));
+  return !!(process.env.GCP_PID && process.env.GCP_SA);
+}
+
+let _cachedPK: string | null = null;
+async function getPrivateKey(): Promise<string> {
+  if (_cachedPK) return _cachedPK;
+  // Private key stored in Supabase (too large for Lambda 4KB env var limit)
+  const sb = getSupabase();
+  const { data } = await sb.from('ccr_secrets').select('value').eq('key', 'GCP_PRIVATE_KEY').single();
+  _cachedPK = (data?.value || '').replace(/\\n/g, '\n');
+  return _cachedPK;
 }
 
 async function getBQ() {
   const { BigQuery } = await import('@google-cloud/bigquery');
-  const credentials = process.env.GOOGLE_CREDENTIALS
-    ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
-    : { client_email: process.env.GCP_SA!, private_key: process.env.GCP_PK!.replace(/\\n/g, '\n') };
+  const privateKey = await getPrivateKey();
+  const credentials = { client_email: process.env.GCP_SA!, private_key: privateKey };
   return new BigQuery({ projectId: process.env.GCP_PID!, credentials });
 }
 
