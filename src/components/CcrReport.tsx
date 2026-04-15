@@ -110,15 +110,32 @@ export function CcrReport({ data }: Props) {
         meta={<StatusBadge status="complete" label="Analysis Complete" />}
       />
 
+      {/* ── Executive Summary (top of report) ─────────────────────── */}
+      {data.insights?.executiveSummary && (
+        <>
+          <SectionDivider label="Executive Summary" />
+          <div className="aidl-report-viewer">
+            <div className="aidl-report-content" style={{ fontSize: '0.85rem', lineHeight: 1.7 }}>
+              {data.insights.executiveSummary}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Comparison Table ───────────────────────────────────────── */}
       <SectionDivider label="Campaign Comparison" />
       <ReportTable<CampaignData>
         columns={[
-          { key: 'domain', header: 'Advertiser', render: r =>
-            r.domain === data.brand.domain
-              ? <><strong>{r.domain}</strong> <StatusBadge status="info" label="Brand" /></>
-              : r.domain
-          },
+          { key: 'domain', header: 'Advertiser', render: r => {
+            const isBrand = r.domain === data.brand.domain;
+            const sub = r.productLine || r.parentCompany;
+            return (
+              <div>
+                <div>{isBrand ? <strong>{r.domain}</strong> : r.domain} {isBrand && <StatusBadge status="info" label="Brand" />}</div>
+                {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{r.parentCompany}{r.productLine ? ` · ${r.productLine}` : ''}</div>}
+              </div>
+            );
+          }},
           { key: 'impressions', header: 'Imps', render: r => fmtNumber(r.totalImpressions), align: 'right' },
           { key: 'spend', header: 'Spend', render: r => `$${fmtMoney(r.totalSpend)}`, align: 'right' },
           { key: 'cpm', header: 'CPM', render: r => r.totalImpressions > 0 ? `$${((r.totalSpend / r.totalImpressions) * 1000).toFixed(2)}` : '—', align: 'right' },
@@ -241,18 +258,6 @@ export function CcrReport({ data }: Props) {
               </div>
             );
           })}
-        </>
-      )}
-
-      {/* ── Executive Summary ─────────────────────────────────────── */}
-      {(data.insights?.executiveSummary || narrativeHtml) && (
-        <>
-          <SectionDivider label="Executive Summary" />
-          <div className="aidl-report-viewer">
-            <div className="aidl-report-content"
-              dangerouslySetInnerHTML={{ __html: data.insights?.executiveSummary || narrativeHtml }}
-            />
-          </div>
         </>
       )}
 

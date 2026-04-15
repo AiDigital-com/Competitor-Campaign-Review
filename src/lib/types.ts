@@ -36,6 +36,10 @@ export interface CampaignData {
   screenshotUrl?: string | null;
   scrapedTitle?: string | null;
   scrapedDescription?: string | null;
+  /** LLM-annotated: parent company name */
+  parentCompany?: string;
+  /** LLM-annotated: primary product line for this domain */
+  productLine?: string;
 }
 
 export interface ActionItem {

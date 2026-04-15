@@ -101,9 +101,43 @@ export default async (req: Request) => {
     }
     console.log(`Competitors: ${adDomains.length} ad + ${seoDomains.length} SEO → ${competitorDomains.length} unique`);
 
+    // ── Step 1b: LLM competitor verification (Brand + Product annotation) ───
+    await setStep('Verifying competitors…');
+    const llmVerify = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'fast', { supabase });
+    let verifiedCompetitors: { domain: string; parentCompany: string; productLine: string; keep: boolean }[] = [];
+    try {
+      const verifyResult = await llmVerify.generateContent({
+        system: `You classify advertising domains. Return ONLY valid JSON array — no markdown, no code fences.
+Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":true/false}
+Rules:
+- parentCompany: the owning corporation (e.g. "PepsiCo" for both pepsi.com and pepsico.com)
+- productLine: the specific product focus of this domain (e.g. "Core Pepsi beverages" vs "Muscle Milk / corporate")
+- keep: false ONLY if the domain is clearly not a competitor (e.g. social media platforms, search engines). Keep both if same parent company but different product lines.
+- Do NOT remove domains just because they share a parent company — they represent distinct ad strategies.`,
+        userParts: [{ text: `Brand being analyzed: ${brand_domain}\nCompetitor domains to verify:\n${competitorDomains.map(d => `- ${d}`).join('\n')}` }],
+        app: `${APP_NAME}:verify-competitors`,
+        userId: userId ?? undefined,
+        jsonMode: true,
+      });
+      try {
+        verifiedCompetitors = JSON.parse(verifyResult.text);
+      } catch {
+        const match = verifyResult.text.match(/\[[\s\S]*\]/);
+        if (match) verifiedCompetitors = JSON.parse(match[0]);
+      }
+      console.log(`Verified: ${verifiedCompetitors.length} competitors, ${verifiedCompetitors.filter(c => c.keep).length} kept`);
+    } catch (err) {
+      console.warn('Competitor verification failed, using unverified list:', err);
+      verifiedCompetitors = competitorDomains.map(d => ({ domain: d, parentCompany: '', productLine: '', keep: true }));
+    }
+
+    // Filter to kept competitors, store annotations for report
+    const competitorAnnotations = new Map(verifiedCompetitors.map(c => [c.domain.toLowerCase(), c]));
+    const filteredCompetitors = verifiedCompetitors.filter(c => c.keep).map(c => c.domain.toLowerCase());
+
     // ── Step 2: AdClarity (BQ query → Supabase training → BQ scan) ────────
     await setStep('Fetching ad intelligence…');
-    const allDomains = [brand_domain, ...competitorDomains].slice(0, 11); // brand + up to 10
+    const allDomains = [brand_domain, ...filteredCompetitors].slice(0, 11); // brand + up to 10
     let adData: CampaignData[] = [];
     try {
       adData = await getAdClarityData(allDomains);
@@ -160,9 +194,21 @@ export default async (req: Request) => {
       creatives: [],
     };
 
+    // Apply LLM annotations (parentCompany + productLine)
+    const brandAnnotation = competitorAnnotations.get(brandKey);
+    if (brandAnnotation) {
+      brandData.parentCompany = brandAnnotation.parentCompany;
+      brandData.productLine = brandAnnotation.productLine;
+    }
+
     // Competitors = all other domains, sorted by total impressions desc
     const competitorsData: CampaignData[] = Array.from(mergedData.values())
       .filter(d => d.domain !== brandKey)
+      .map(d => {
+        const ann = competitorAnnotations.get(d.domain);
+        if (ann) { d.parentCompany = ann.parentCompany; d.productLine = ann.productLine; }
+        return d;
+      })
       .sort((a, b) => b.totalImpressions - a.totalImpressions)
       .slice(0, 5);
 
