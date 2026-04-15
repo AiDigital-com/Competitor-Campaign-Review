@@ -14,6 +14,8 @@ import {
   ChatPanel,
   Sidebar,
   UploadZone,
+  ConnectedShareBar,
+  DownloadBar,
   useOrchestrator,
   useFileUpload,
   useJobStatus,
@@ -306,47 +308,68 @@ function AppContent({
 
   return (
     <>
-      <ChatPanel
-        messages={orchestrator.messages}
-        streaming={orchestrator.streaming}
-        error={error ?? orchestrator.error}
-        onSend={handleSend}
-        asset={imageUpload.result}
-        inputPrefix={!dispatched ? (
-          <UploadZone
-            onFile={(file) => imageUpload.upload(file)}
-            onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
-            onClear={imageUpload.clear}
-            preview={imageUpload.previewUrl}
-            uploading={imageUpload.uploading}
-            error={imageUpload.error}
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            fileLabel="Drop a campaign image or enter a URL"
+      {/* Phase 1: Chat + Upload (pre-report) */}
+      {!reportData && (
+        <>
+          <ChatPanel
+            messages={orchestrator.messages}
+            streaming={orchestrator.streaming}
+            error={error ?? orchestrator.error}
+            onSend={handleSend}
+            asset={imageUpload.result}
+            inputPrefix={!dispatched ? (
+              <UploadZone
+                onFile={(file) => imageUpload.upload(file)}
+                onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
+                onClear={imageUpload.clear}
+                preview={imageUpload.previewUrl}
+                uploading={imageUpload.uploading}
+                error={imageUpload.error}
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                fileLabel="Drop a campaign image or enter a URL"
+              />
+            ) : undefined}
+            welcomeTitle="Competitor Campaign Review"
+            welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
+            placeholder={
+              imageUpload.result
+                ? 'Image ready — press enter to analyze…'
+                : 'Enter a brand URL or describe the campaign…'
+            }
           />
-        ) : undefined}
-        welcomeTitle="Competitor Campaign Review"
-        welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
-        placeholder={
-          imageUpload.result
-            ? 'Image ready — press enter to analyze…'
-            : 'Enter a brand URL or describe the campaign…'
-        }
-      />
 
-      {/* Post-dispatch: pipeline progress */}
-      {dispatched && !reportData && (
-        <div className="ccr-progress">
-          <div className="ccr-progress__spinner" />
-          <p className="ccr-progress__step">
-            {progressStep ?? 'Starting analysis…'}
-          </p>
-        </div>
+          {/* Pipeline progress */}
+          {dispatched && (
+            <div className="ccr-progress">
+              <div className="ccr-progress__spinner" />
+              <p className="ccr-progress__step">
+                {progressStep ?? 'Starting analysis…'}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Report */}
+      {/* Phase 2: Full report with share bar + download */}
       {reportData && (
-        <div className="ccr-report-wrapper">
-          <CcrReport data={reportData} />
+        <div className="ccr-report-page">
+          <div className="ccr-report-bar">
+            <DownloadBar
+              reportText={reportData.narrative || ''}
+              title={`CCR — ${reportData.brand?.domain || 'Report'}`}
+              visualSelector=".ccr-report"
+            />
+            {supabase && activeSessionId && (
+              <ConnectedShareBar
+                jobId={activeSessionId}
+                supabase={supabase}
+                tableName={SESSION_TABLE}
+              />
+            )}
+          </div>
+          <div className="ccr-report-wrapper">
+            <CcrReport data={reportData} />
+          </div>
         </div>
       )}
     </>

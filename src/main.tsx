@@ -7,11 +7,18 @@ import App from './App'
 import './index.css'
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string
+const isPublicReport = window.location.pathname.startsWith('/r/')
 const isHelpPage = window.location.pathname === '/help'
 
 applyTheme(resolveTheme())
 
-if (isHelpPage) {
+if (isPublicReport) {
+  import('./pages/PublicReportPage').then(({ PublicReportPage }) => {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode><PublicReportPage /></React.StrictMode>
+    )
+  })
+} else if (isHelpPage) {
   import('./pages/HelpPage').then(({ default: Help }) => {
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode><Help /></React.StrictMode>

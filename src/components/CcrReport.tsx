@@ -90,19 +90,19 @@ function CampaignCard({ data, isBrand }: CardProps) {
         <div className="ccr-card__no-data">No ad data in AdClarity dataset</div>
       )}
 
-      {data.channels.length > 0 && (
+      {(data.channels || []).length > 0 && (
         <div className="ccr-card__channels">
-          {data.channels.slice(0, 5).map(c => (
+          {(data.channels || []).slice(0, 5).map(c => (
             <span key={c.name} className="ccr-card__channel-pill">{c.name}</span>
           ))}
         </div>
       )}
 
-      {data.publishers.length > 0 && (
+      {(data.publishers || []).length > 0 && (
         <div className="ccr-card__publishers">
           <p className="ccr-card__publishers-label">Top Publishers</p>
           <ul className="ccr-card__publishers-list">
-            {data.publishers.slice(0, 5).map(p => (
+            {(data.publishers || []).slice(0, 5).map(p => (
               <li key={p.domain} className="ccr-card__publisher-item">
                 <span className="ccr-card__publisher-domain">{p.domain}</span>
                 <span className="ccr-card__publisher-imps">{fmtNumber(p.impressions)}</span>
@@ -112,24 +112,31 @@ function CampaignCard({ data, isBrand }: CardProps) {
         </div>
       )}
 
-      {data.creatives.length > 0 && (
+      {(data.creatives || []).length > 0 && (
         <div className="ccr-card__creatives">
           <p className="ccr-card__creatives-label">Ad Creatives ({data.creatives.length})</p>
           <div className="ccr-card__creatives-grid">
-            {data.creatives.slice(0, 4).map(c => (
-              c.url ? (
+            {data.creatives.slice(0, 8).map(c => {
+              if (!c.url) return null;
+              const isVideo = c.url.includes('_video.') || c.url.endsWith('.mp4') || c.url.endsWith('.webm');
+              return (
                 <a
                   key={c.id}
                   href={c.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ccr-card__creative-thumb"
-                  title={`${c.channelName} · ${c.firstSeen}`}
+                  title={`${c.channelName || 'Ad'} · ${c.firstSeen || ''}`}
                 >
-                  <img src={c.url} alt={`Creative ${c.id}`} loading="lazy" />
+                  {isVideo ? (
+                    <video src={c.url} muted playsInline preload="metadata" />
+                  ) : (
+                    <img src={c.url} alt={`Creative ${c.id}`} loading="lazy" />
+                  )}
+                  {isVideo && <span className="ccr-card__creative-play">▶</span>}
                 </a>
-              ) : null
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
