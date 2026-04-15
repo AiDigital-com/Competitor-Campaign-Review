@@ -9,10 +9,17 @@ import './index.css'
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string
 const isPublicReport = window.location.pathname.startsWith('/r/')
 const isHelpPage = window.location.pathname === '/help'
+const isMobile = window.location.pathname === '/m'
 
 applyTheme(resolveTheme())
 
-if (isPublicReport) {
+if (isMobile) {
+  import('./pages/MobileApp').then(({ default: MobileApp }) => {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode><MobileApp /></React.StrictMode>
+    )
+  })
+} else if (isPublicReport) {
   import('./pages/PublicReportPage').then(({ PublicReportPage }) => {
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode><PublicReportPage /></React.StrictMode>

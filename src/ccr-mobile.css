@@ -1,0 +1,275 @@
+/* ── CCR Mobile App (/m) ─────────────────────────────────────────────── */
+
+.ccr-m-app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+.ccr-m-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.ccr-m-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ccr-m-header-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Main ────────────────────────────────────────────────────────────── */
+.ccr-m-main {
+  flex: 1;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.ccr-m-footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Intake ───────────────────────────────────────────────────────────── */
+.ccr-m-intake {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  gap: 12px;
+}
+
+.ccr-m-intake-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.ccr-m-intake-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-width: 320px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ccr-m-intake-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+  margin-top: 8px;
+}
+
+.ccr-m-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ccr-m-input:focus {
+  border-color: var(--accent);
+}
+
+.ccr-m-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ccr-m-btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.ccr-m-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ccr-m-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────── */
+.ccr-m-progress {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ccr-m-progress-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ── Report ───────────────────────────────────────────────────────────── */
+.ccr-m-report {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── KPI Tiles ────────────────────────────────────────────────────────── */
+.ccr-m-kpi {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── Section Label ────────────────────────────────────────────────────── */
+.ccr-m-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+/* ── Exec Summary ─────────────────────────────────────────────────────── */
+.ccr-m-summary {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+}
+
+.ccr-m-summary p {
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 6px 0 0;
+}
+
+/* ── Campaign Cards ───────────────────────────────────────────────────── */
+.ccr-m-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ccr-m-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  transition: border-color 0.3s;
+}
+
+.ccr-m-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ccr-m-card-domain {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ccr-m-card-metrics {
+  display: flex;
+  gap: 10px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.ccr-m-card-campaign {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Creative Carousel ────────────────────────────────────────────────── */
+.ccr-m-carousel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.ccr-m-carousel::-webkit-scrollbar {
+  height: 3px;
+}
+
+.ccr-m-carousel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ccr-m-carousel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.ccr-m-carousel-item {
+  flex-shrink: 0;
+  width: 140px;
+  scroll-snap-align: start;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ── Error ─────────────────────────────────────────────────────────────── */
+.ccr-m-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  text-align: center;
+  gap: 16px;
+}
+
+.ccr-m-error p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 300px;
+}
