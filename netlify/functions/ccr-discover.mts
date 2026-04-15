@@ -5,7 +5,7 @@
  */
 import type { Config } from '@netlify/functions';
 import { getCompetitorDomains } from './_shared/dataforseo.js';
-import { discoverAdCompetitors, getAdClarityData, getCampaignDetail } from './_shared/bigquery.js';
+import { discoverAdCompetitors, getAdSummary, getCampaignDetail } from './_shared/bigquery.js';
 import { getSupabase, mergeReportData, setStep, insertTasks, markError } from './_shared/pipeline.js';
 import { log } from './_shared/logger.js';
 
@@ -68,20 +68,31 @@ export default async (req: Request) => {
       .filter((v: string, i: number, a: string[]) => v && a.indexOf(v) === i)
       .slice(0, 5);
 
-    // Fetch summary-level AdClarity data for brand + all candidates
+    // Fetch ONLY summary metrics — no creatives or publishers needed at discovery stage
+    // Saves 2 heavy BQ scans (creative detail + publisher data) per run
     await setStep(supabase, jobId, 'Fetching ad summaries…');
     const allDomains = [brandDomain.toLowerCase(), ...candidateDomains];
-    const summaryData = await getAdClarityData(allDomains);
+    const summaryRows = await getAdSummary(allDomains);
 
-    // Write partial report — candidates with summaries
+    // Build summary map from raw summary rows
     const summaryMap: Record<string, any> = {};
-    for (const d of summaryData) {
-      summaryMap[d.domain] = {
-        domain: d.domain,
-        totalImpressions: d.totalImpressions,
-        totalSpend: d.totalSpend,
-        channels: d.channels,
+    for (const s of summaryRows) {
+      const domain = s.advertiser_domain;
+      const imp = Number(s.impressions) || 0;
+      const spend = Number(s.spend) || 0;
+      const channels: { name: string; impressions: number; spend: number }[] = [];
+      const total = imp || 1;
+      const chMap: Record<string, number> = {
+        Display: Number(s.display_impressions) || 0,
+        Video: Number(s.video_impressions) || 0,
+        Social: Number(s.social_impressions) || 0,
+        CTV: Number(s.ctv_impressions) || 0,
       };
+      for (const [name, chImp] of Object.entries(chMap)) {
+        if (chImp > 0) channels.push({ name, impressions: chImp, spend: Math.round(spend * chImp / total) });
+      }
+      channels.sort((a, b) => b.impressions - a.impressions);
+      summaryMap[domain] = { domain, totalImpressions: imp, totalSpend: spend, channels };
     }
 
     await mergeReportData(supabase, jobId, {
@@ -95,7 +106,7 @@ export default async (req: Request) => {
       function_name: 'ccr-discover',
       user_id: userId,
       entity_id: jobId,
-      meta: { candidateCount: candidateDomains.length, withData: summaryData.length },
+      meta: { candidateCount: candidateDomains.length, withData: summaryRows.length },
     });
 
     // Insert next task: VERIFY (gate)

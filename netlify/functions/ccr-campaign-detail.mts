@@ -1,12 +1,15 @@
 /**
  * Lambda 3a: CAMPAIGN DETAIL (parallel)
- * Fetches full campaign + creative detail for verified domains.
- * LLM filters campaigns by product-line relevance — recalculates metrics from filtered set.
- * Writes deterministic campaign data to report_data.
+ *
+ * Optimized BQ flow — creatives deferred until AFTER LLM filtering:
+ * 1. Fetch campaigns (windowed per-domain) + summary metrics — LIGHT scans
+ * 2. LLM classifies campaigns by product-line relevance
+ * 3. Fetch creatives ONLY for surviving campaigns (Gate A: campaign name filter, Gate B: skip empty domains)
+ * 4. Recalculate metrics from filtered set, write to report_data
  */
 import type { Config } from '@netlify/functions';
 import { createLLMProvider } from '@AiDigital-com/design-system/server';
-import { getAdClarityData, getCampaignDetailFull } from './_shared/bigquery.js';
+import { getAdSummary, getCampaignDetailFull, getCreativesForCampaigns } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
   isPhase3DataComplete, markError, APP_NAME,
@@ -20,13 +23,11 @@ export default async (req: Request) => {
   try {
     await setStep(supabase, jobId, 'Fetching campaign detail…');
 
-    // Full AdClarity data for brand + verified competitors
-    // Exhaustive fetch: windowed per-domain (50 campaigns each, single BQ scan)
-    // Gives LLM the full 3-month rolling window to classify, not a skimmed global top-N
+    // ── Step 1: LIGHT scans — campaigns + summary only (no creatives) ───────
     const brandKey = brandDomain.toLowerCase();
     const allDomains = [brandKey, ...verifiedDomains];
-    const [adData, allCampaigns] = await Promise.all([
-      getAdClarityData(allDomains),
+    const [summaryRows, allCampaigns] = await Promise.all([
+      getAdSummary(allDomains),
       getCampaignDetailFull(allDomains),
     ]);
 
@@ -38,14 +39,14 @@ export default async (req: Request) => {
       campaignsByDomain.get(d)!.push(c);
     }
 
-    // LLM: classify each competitor's campaigns as product-relevant or not
+    // ── Step 2: LLM campaign filtering ──────────────────────────────────────
     await setStep(supabase, jobId, 'Filtering campaigns by product line…');
     const relevantCampaigns = new Map<string, Set<string>>();
 
     if (brandProductLine) {
       const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'fast', { supabase });
 
-      // Build campaign list for LLM — all competitor campaigns
+      // Build campaign list for LLM — all competitor campaigns (unique names only)
       const campList: { domain: string; campaign: string }[] = [];
       for (const domain of verifiedDomains) {
         const camps = campaignsByDomain.get(domain) || [];
@@ -98,17 +99,79 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
       }
     }
 
-    // Build CampaignData with filtered metrics
-    const adDataMap = new Map(adData.map(d => [d.domain, d]));
+    // ── Step 3: DEFERRED creative fetch — only for surviving campaigns ──────
+    // Gate B: build map of domain → relevant campaign names (skip domains with 0)
+    // Gate A: campaign name filter in BQ WHERE clause
+    await setStep(supabase, jobId, 'Fetching creatives for relevant campaigns…');
+
+    const creativeFetchMap = new Map<string, string[]>();
+    // Brand: all campaigns (no filtering)
+    const brandCamps = campaignsByDomain.get(brandKey) || [];
+    const brandCampNames = [...new Set(brandCamps.map(c => c.creative_campaign_name).filter(Boolean))];
+    if (brandCampNames.length > 0) creativeFetchMap.set(brandKey, brandCampNames);
+
+    // Competitors: only relevant campaigns
+    for (const domain of verifiedDomains) {
+      const relevant = relevantCampaigns.get(domain);
+      if (relevant && relevant.size > 0) {
+        creativeFetchMap.set(domain, [...relevant]);
+      } else if (!brandProductLine) {
+        // No filtering applied — fetch all campaigns for this domain
+        const camps = campaignsByDomain.get(domain) || [];
+        const names = [...new Set(camps.map(c => c.creative_campaign_name).filter(Boolean))];
+        if (names.length > 0) creativeFetchMap.set(domain, names);
+      }
+    }
+
+    const creativeRows = await getCreativesForCampaigns(creativeFetchMap, 20);
+
+    // Group creatives by domain
+    const creativesByDomain = new Map<string, any[]>();
+    for (const c of creativeRows) {
+      const d = c.advertiser_domain;
+      if (!creativesByDomain.has(d)) creativesByDomain.set(d, []);
+      creativesByDomain.get(d)!.push(c);
+    }
+
+    console.log(`[campaign-detail] Creatives fetched: ${creativeRows.length} rows for ${creativeFetchMap.size} domains (skipped ${allDomains.length - creativeFetchMap.size} empty)`);
+
+    // ── Step 4: Build CampaignData with filtered metrics ────────────────────
+    const summaryMap = new Map(summaryRows.map(s => [s.advertiser_domain, s]));
 
     function buildFiltered(domain: string): CampaignData {
-      const raw = adDataMap.get(domain);
+      const summary = summaryMap.get(domain);
       const domainCampaigns = campaignsByDomain.get(domain) || [];
       const relevant = relevantCampaigns.get(domain);
+      const domainCreatives = (creativesByDomain.get(domain) || []).slice(0, 20).map(c => ({
+        id: String(c.creative_id || ''),
+        url: c.creative_url_supplier || '',
+        mimeType: c.creative_mime_type || '',
+        channelName: c.channel_name || '',
+        firstSeen: c.first_seen || '',
+        impressions: Number(c.impressions) || 0,
+        spend: Number(c.spend) || 0,
+        campaignName: c.creative_campaign_name || '',
+      }));
 
-      // If no filter (brand itself, or LLM didn't run), use all data
+      // If no filter (brand itself, or LLM didn't run), use summary-level data
       if (!relevant || domain === brandKey) {
-        return raw || { domain, totalImpressions: 0, totalSpend: 0, channels: [], publishers: [], creatives: [] };
+        const imp = Number(summary?.impressions) || 0;
+        const spend = Number(summary?.spend) || 0;
+        const total = imp || 1;
+        const channels: CampaignData['channels'] = [];
+        if (summary) {
+          const chMap: Record<string, number> = {
+            Display: Number(summary.display_impressions) || 0,
+            Video: Number(summary.video_impressions) || 0,
+            Social: Number(summary.social_impressions) || 0,
+            CTV: Number(summary.ctv_impressions) || 0,
+          };
+          for (const [name, chImp] of Object.entries(chMap)) {
+            if (chImp > 0) channels.push({ name, impressions: chImp, spend: Math.round(spend * chImp / total) });
+          }
+          channels.sort((a, b) => b.impressions - a.impressions);
+        }
+        return { domain, totalImpressions: imp, totalSpend: spend, channels, publishers: [], creatives: domainCreatives };
       }
 
       // Filter campaigns to relevant ones and recalculate metrics
@@ -130,21 +193,11 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
         .map(([name, d]) => ({ name, impressions: d.impressions, spend: d.spend }))
         .sort((a, b) => b.impressions - a.impressions);
 
-      // Filter creatives to only those from relevant campaigns
-      const keptCampNames = new Set(keptCampaigns.map(c => c.creative_campaign_name));
-      const filteredCreatives = (raw?.creatives || []).filter(c =>
-        !c.campaignName || keptCampNames.has(c.campaignName)
-      );
-
+      // Creatives already filtered by campaign name in BQ query (Gate A)
       return {
-        domain,
-        totalImpressions,
-        totalSpend,
-        channels,
-        publishers: raw?.publishers || [],
-        creatives: filteredCreatives,
-        parentCompany: raw?.parentCompany,
-        productLine: raw?.productLine,
+        domain, totalImpressions, totalSpend, channels,
+        publishers: [],
+        creatives: domainCreatives,
       };
     }
 
