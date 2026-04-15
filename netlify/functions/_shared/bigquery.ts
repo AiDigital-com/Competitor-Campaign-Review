@@ -176,7 +176,8 @@ export async function getCampaignDetailFull(domains: string[]): Promise<any[]> {
         FROM ${rawTable()}
         WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
         GROUP BY 1,2,3,4,5,6
-        ORDER BY advertiser_domain, impressions DESC`,
+        ORDER BY advertiser_domain, impressions DESC
+        LIMIT 2000`,
       params: { domains: lower },
       types: { domains: ['STRING'] },
     });
@@ -261,7 +262,8 @@ export async function getCreativeDetailFull(domains: string[]): Promise<any[]> {
         FROM ${rawTable()}
         WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
         GROUP BY 1,2,3,4,5,6,7,8,9
-        ORDER BY advertiser_domain, impressions DESC`,
+        ORDER BY advertiser_domain, impressions DESC
+        LIMIT 500`,
       params: { domains: lower },
       types: { domains: ['STRING'] },
     });
