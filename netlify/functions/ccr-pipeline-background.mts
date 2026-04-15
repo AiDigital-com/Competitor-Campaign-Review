@@ -190,7 +190,7 @@ Rules:
       userParts: [{ text: analysisContext }],
       app: `${APP_NAME}:insights`,
       userId: userId ?? undefined,
-      maxTokens: 2048,
+      maxTokens: 4096,
       jsonMode: true,
     });
 
