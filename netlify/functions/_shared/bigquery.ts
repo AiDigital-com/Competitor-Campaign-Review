@@ -268,10 +268,19 @@ export async function getExpenditureTrend(domains: string[]): Promise<any[]> {
   return data || [];
 }
 
+export interface CompetitorCandidate {
+  domain: string;
+  impressions: number;
+  spend: number;
+  topCampaigns: string[];
+}
+
 /**
- * Discover top ad competitors by impressions (same category, excluding the brand).
+ * Discover top ad competitors (same category) WITH top campaign names.
+ * Campaign names enable product-line matching in LLM verify step.
+ * Single BQ query — no extra latency vs previous version.
  */
-export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<string[]> {
+export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<CompetitorCandidate[]> {
   const brand = brandDomain.toLowerCase();
 
   if (useBQ()) {
@@ -283,30 +292,54 @@ export async function discoverAdCompetitors(brandDomain: string, limit = 10): Pr
           FROM ${rawTable()}
           WHERE LOWER(advertiser_domain) = @brand AND ${DATE_FILTER}
           LIMIT 1
+        ),
+        competitor_campaigns AS (
+          SELECT
+            LOWER(advertiser_domain) as advertiser_domain,
+            creative_campaign_name,
+            SUM(impressions) as camp_imps,
+            SUM(spend) as camp_spend
+          FROM ${rawTable()}
+          WHERE LOWER(advertiser_domain) != @brand
+            AND ${DATE_FILTER}
+            AND advertiser_second_category = (SELECT advertiser_second_category FROM brand_cat)
+          GROUP BY 1, 2
         )
-        SELECT LOWER(advertiser_domain) as advertiser_domain, SUM(impressions) as impressions
-        FROM ${rawTable()}
-        WHERE LOWER(advertiser_domain) != @brand
-          AND ${DATE_FILTER}
-          AND advertiser_second_category = (SELECT advertiser_second_category FROM brand_cat)
+        SELECT
+          advertiser_domain,
+          SUM(camp_imps) as impressions,
+          SUM(camp_spend) as spend,
+          ARRAY_AGG(creative_campaign_name ORDER BY camp_imps DESC LIMIT 5) as top_campaigns
+        FROM competitor_campaigns
         GROUP BY 1
-        ORDER BY impressions DESC
+        ORDER BY SUM(camp_imps) DESC
         LIMIT @limit`,
       params: { brand, limit },
     });
     await trackBQUsage('discover-competitors');
     console.log(`[BQ] discoverAdCompetitors: ${rows.length} competitors for ${brand}`);
-    return rows.map((r: any) => r.advertiser_domain);
+    return rows.map((r: any) => ({
+      domain: r.advertiser_domain,
+      impressions: Number(r.impressions) || 0,
+      spend: Number(r.spend) || 0,
+      topCampaigns: (r.top_campaigns || []).map((c: string) => (c || '').replace(/\s+\d{7,}$/, '')),
+    }));
   }
 
+  // Supabase fallback — no campaign names available from summary table
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_adv_summary')
-    .select('advertiser_domain, impressions')
+    .select('advertiser_domain, impressions, spend')
     .neq('advertiser_domain', brand)
     .order('impressions', { ascending: false })
     .limit(limit);
-  return (data || []).map(r => r.advertiser_domain);
+  return (data || []).map(r => ({
+    domain: r.advertiser_domain,
+    impressions: Number(r.impressions) || 0,
+    spend: Number(r.spend) || 0,
+    topCampaigns: [],
+  }));
 }
 
 /**

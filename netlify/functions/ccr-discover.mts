@@ -27,9 +27,9 @@ export default async (req: Request) => {
     ]);
 
     const seoDomains = seoResult.status === 'fulfilled' ? seoResult.value : [];
-    const adDomains = adResult.status === 'fulfilled' ? adResult.value : [];
+    const adCandidates = adResult.status === 'fulfilled' ? adResult.value : [];
 
-    // Track DataForSeo API cost (1 unit = 1 competitor_domain call)
+    // Track DataForSeo API cost
     if (seoDomains.length > 0) {
       const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
       const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
@@ -41,15 +41,25 @@ export default async (req: Request) => {
       }).catch(() => {});
     }
 
-    // Merge: ad competitors first (they have data), then SEO
+    // Merge: ad competitors first (they have campaign data), then SEO
     const seen = new Set<string>([brandDomain.toLowerCase()]);
     const candidateDomains: string[] = [];
-    for (const d of [...adDomains, ...seoDomains]) {
+    // Build campaign lookup from ad candidates (BQ provides top campaigns per domain)
+    const candidateCampaigns: Record<string, string[]> = {};
+    for (const c of adCandidates) {
+      const lower = c.domain.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        candidateDomains.push(lower);
+        candidateCampaigns[lower] = c.topCampaigns;
+      }
+    }
+    for (const d of seoDomains) {
       const lower = d.toLowerCase();
       if (!seen.has(lower)) { seen.add(lower); candidateDomains.push(lower); }
     }
 
-    console.log(`[discover] ${adDomains.length} ad + ${seoDomains.length} SEO → ${candidateDomains.length} candidates`);
+    console.log(`[discover] ${adCandidates.length} ad + ${seoDomains.length} SEO → ${candidateDomains.length} candidates`);
 
     // Fetch summary-level AdClarity data for brand + all candidates
     await setStep(supabase, jobId, 'Fetching ad summaries…');
@@ -84,7 +94,7 @@ export default async (req: Request) => {
     // Insert next task: VERIFY (gate)
     await insertTasks(supabase, jobId, [{
       taskType: 'ccr_verify',
-      payload: { jobId, brandDomain, userId, candidateDomains, summaries: summaryMap },
+      payload: { jobId, brandDomain, userId, candidateDomains, candidateCampaigns, summaries: summaryMap },
     }]);
 
   } catch (err) {

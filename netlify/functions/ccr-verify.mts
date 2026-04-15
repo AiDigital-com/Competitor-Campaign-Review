@@ -11,32 +11,37 @@ import { getCampaignDetail } from './_shared/bigquery.js';
 import { log } from './_shared/logger.js';
 
 export default async (req: Request) => {
-  const { jobId, brandDomain, userId, candidateDomains, summaries } = await req.json();
+  const { jobId, brandDomain, userId, candidateDomains, candidateCampaigns, summaries } = await req.json();
   const supabase = getSupabase();
 
   try {
     await setStep(supabase, jobId, 'Verifying competitors…');
 
-    // LLM verification with summary context
+    // LLM verification with summary + campaign name context
     const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'fast', { supabase });
 
     const summaryContext = candidateDomains.map((d: string) => {
       const s = summaries[d];
+      const campaigns = (candidateCampaigns?.[d] || []).slice(0, 3);
+      const campStr = campaigns.length > 0 ? `\n    Top campaigns: ${campaigns.map((c: string) => `"${c}"`).join(', ')}` : '';
       return s
-        ? `- ${d}: ${fmtM(s.totalImpressions)} imps, $${fmtM(s.totalSpend)} spend, channels: ${(s.channels || []).map((c: any) => c.name).join(', ')}`
+        ? `- ${d}: ${fmtM(s.totalImpressions)} imps, $${fmtM(s.totalSpend)} spend, channels: ${(s.channels || []).map((c: any) => c.name).join(', ')}${campStr}`
         : `- ${d}: no ad data`;
     }).join('\n');
 
     let verified: { domain: string; parentCompany: string; productLine: string; keep: boolean }[] = [];
     try {
       const result = await llm.generateContent({
-        system: `You classify advertising domains for competitive analysis. Return ONLY valid JSON array — no markdown.
+        system: `You classify advertising domains for competitive analysis based on their PRODUCT LINE, not just industry.
+Return ONLY valid JSON array — no markdown.
 Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":true/false}
-- parentCompany: owning corporation (e.g. "PepsiCo")
-- productLine: specific product focus (e.g. "Core Pepsi beverages" vs "Muscle Milk / corporate")
-- keep: false ONLY if clearly not a competitor (social platforms, search engines, unrelated industry)
-- Do NOT remove domains just because they share a parent company`,
-        userParts: [{ text: `Brand: ${brandDomain}\nCandidate competitors with spend data:\n${summaryContext}` }],
+- parentCompany: owning corporation
+- productLine: specific product focus derived from campaign names (e.g. "retirement planning" vs "car insurance")
+- keep: true ONLY if the competitor sells the SAME TYPE of product as the brand
+  - Example: if brand runs "retirement planning" campaigns, keep competitors with retirement/401k/annuity campaigns
+  - Remove competitors in the same industry but different product line (e.g. car insurance vs retirement)
+- Do NOT remove domains just because they share a parent company — they may have distinct product lines`,
+        userParts: [{ text: `Brand: ${brandDomain}\nCandidate competitors with spend data and campaign names:\n${summaryContext}` }],
         app: `${APP_NAME}:verify`,
         userId,
         jsonMode: true,
