@@ -1,6 +1,7 @@
 /**
  * CcrReport — competitor campaign intelligence report.
- * Uses DS components: PageHeader, ReportTable, SectionDivider, AssetPreview, StatusBadge.
+ * Grid layout: brands vertical → campaigns horizontal → creatives vertical → metrics bubbles.
+ * DS components: PageHeader, ReportTable, SectionDivider, AssetPreview, StatusBadge.
  */
 import { useState, useEffect } from 'react';
 import {
@@ -49,6 +50,17 @@ function campaignName(raw: string): string {
   return raw.replace(/\s+\d{7,}$/, '').trim() || raw;
 }
 
+/** Group creatives by campaign name. */
+function groupByCampaign(creatives: CreativeData[]): Map<string, CreativeData[]> {
+  const map = new Map<string, CreativeData[]>();
+  for (const c of creatives) {
+    const camp = campaignName(c.campaignName || (c as any).all_campaigns || 'Uncategorized');
+    if (!map.has(camp)) map.set(camp, []);
+    map.get(camp)!.push(c);
+  }
+  return map;
+}
+
 export function CcrReport({ data }: Props) {
   const [narrativeHtml, setNarrativeHtml] = useState('');
 
@@ -88,46 +100,108 @@ export function CcrReport({ data }: Props) {
         getKey={r => r.domain}
       />
 
-      {/* ── Creatives by Campaign ─────────────────────────────────── */}
+      {/* ── Creative Grid: brands vertical → campaigns horizontal ── */}
       {allDomains.some(d => (d.creatives || []).length > 0) && (
         <>
-          <SectionDivider label="Ad Creatives" />
+          <SectionDivider label="Ad Creatives by Campaign" />
           {allDomains.map(comp => {
             const creatives = (comp.creatives || []).filter(c => c.url);
             if (creatives.length === 0) return null;
 
-            const byCampaign = new Map<string, (CreativeData & { impressions?: number; spend?: number })[]>();
-            for (const c of creatives) {
-              const camp = campaignName((c as any).all_campaigns || (c as any).campaignName || 'Uncategorized');
-              if (!byCampaign.has(camp)) byCampaign.set(camp, []);
-              byCampaign.get(camp)!.push(c as any);
-            }
-
-            const domainLabel = comp.domain === data.brand.domain ? `${comp.domain} (Brand)` : comp.domain;
+            const campaigns = groupByCampaign(creatives);
+            const isBrand = comp.domain === data.brand.domain;
 
             return (
               <div key={comp.domain} style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: 'var(--text)', margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 600 }}>{domainLabel}</h4>
-                {Array.from(byCampaign.entries()).map(([camp, campCreatives]) => (
-                  <div key={camp} style={{ marginBottom: '1rem', paddingLeft: '0.5rem' }}>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>{camp}</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                      {campCreatives.slice(0, 4).map(c => (
-                        <div key={c.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxWidth: 200 }}>
-                          <AssetPreview
-                            type={isVideoUrl(c.url) ? 'video' : 'image'}
-                            url={c.url}
-                          />
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                            {(c as any).impressions ? `${fmtNumber((c as any).impressions)} imps` : ''}
-                            {(c as any).spend ? ` · $${fmtMoney((c as any).spend)}` : ''}
-                            {c.firstSeen ? ` · ${c.firstSeen}` : ''}
-                          </div>
+                {/* Brand header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }}>{comp.domain}</span>
+                  {isBrand && <StatusBadge status="info" label="Brand" />}
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {fmtNumber(comp.totalImpressions)} imps · ${fmtMoney(comp.totalSpend)} · {campaigns.size} campaign{campaigns.size !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Campaigns: horizontal scroll */}
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  overflowX: 'auto',
+                  paddingBottom: '0.5rem',
+                }}>
+                  {Array.from(campaigns.entries()).map(([campName, campCreatives]) => {
+                    const campImps = campCreatives.reduce((s, c) => s + (c.impressions || 0), 0);
+                    const campSpend = campCreatives.reduce((s, c) => s + (c.spend || 0), 0);
+
+                    return (
+                      <div key={campName} style={{
+                        minWidth: 220,
+                        maxWidth: 260,
+                        flexShrink: 0,
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-sm, 8px)',
+                        background: 'var(--surface)',
+                        overflow: 'hidden',
+                      }}>
+                        {/* Campaign name */}
+                        <div style={{
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          color: 'var(--text)',
+                          borderBottom: '1px solid var(--border)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }} title={campName}>
+                          {campName}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+
+                        {/* Creatives: vertical stack */}
+                        <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {campCreatives.slice(0, 3).map(c => (
+                            <AssetPreview
+                              key={c.id}
+                              type={isVideoUrl(c.url) ? 'video' : 'image'}
+                              url={c.url}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Metrics bubbles */}
+                        <div style={{
+                          padding: '0.5rem 0.75rem',
+                          borderTop: '1px solid var(--border)',
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '0.375rem',
+                        }}>
+                          {campImps > 0 && (
+                            <span style={{
+                              fontSize: '0.65rem', padding: '0.125rem 0.5rem',
+                              borderRadius: '999px', background: 'var(--surface2)',
+                              color: 'var(--text-muted)', border: '1px solid var(--border)',
+                            }}>{fmtNumber(campImps)} imps</span>
+                          )}
+                          {campSpend > 0 && (
+                            <span style={{
+                              fontSize: '0.65rem', padding: '0.125rem 0.5rem',
+                              borderRadius: '999px', background: 'var(--surface2)',
+                              color: 'var(--text-muted)', border: '1px solid var(--border)',
+                            }}>${fmtMoney(campSpend)}</span>
+                          )}
+                          {campCreatives[0]?.firstSeen && (
+                            <span style={{
+                              fontSize: '0.65rem', padding: '0.125rem 0.5rem',
+                              borderRadius: '999px', background: 'var(--surface2)',
+                              color: 'var(--text-muted)', border: '1px solid var(--border)',
+                            }}>Since {campCreatives[0].firstSeen}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
