@@ -1,22 +1,24 @@
 /**
  * CcrReport — competitor campaign intelligence report.
- * Uses DS components: PageHeader, KpiTile, ReportTable, SectionDivider, AssetPreview.
- * No custom CSS — all styling via DS component classes.
+ * Uses DS components: PageHeader, ReportTable, SectionDivider, AssetPreview.
  */
 import { useState, useEffect } from 'react';
 import {
   PageHeader,
-  KpiTile,
   ReportTable,
   SectionDivider,
   AssetPreview,
   StatusBadge,
 } from '@AiDigital-com/design-system';
 import { renderMarkdown } from '@AiDigital-com/design-system/utils';
-import type { CcrReportData, CampaignData, ChannelData } from '../lib/types';
+import type { CcrReportData, CampaignData } from '../lib/types';
 
 interface Props {
   data: CcrReportData;
+}
+
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.includes('_video.');
 }
 
 export function CcrReport({ data }: Props) {
@@ -35,89 +37,50 @@ export function CcrReport({ data }: Props) {
       <PageHeader
         title={`Campaign Intelligence: ${data.brand.domain}`}
         subtitle={`Compared against ${(data.competitors || []).length} competitor${(data.competitors || []).length !== 1 ? 's' : ''} · ${formatDate(data.generatedAt)}`}
-        meta={
-          <StatusBadge status="complete" label="Analysis Complete" />
-        }
+        meta={<StatusBadge status="complete" label="Analysis Complete" />}
       />
 
-      {/* ── Brand KPIs ─────────────────────────────────────────────── */}
-      <SectionDivider label="Your Brand" />
-      <div className="aidl-kpi-row">
-        <KpiTile label="Total Impressions" value={fmtNumber(data.brand.totalImpressions)} />
-        <KpiTile label="Estimated Spend" value={`$${fmtMoney(data.brand.totalSpend)}`} />
-        <KpiTile
-          label="CPM"
-          value={data.brand.totalImpressions > 0
-            ? `$${((data.brand.totalSpend / data.brand.totalImpressions) * 1000).toFixed(2)}`
-            : 'N/A'}
-        />
-        <KpiTile label="Publishers" value={String((data.brand as any).distinct_publishers || (data.brand.publishers || []).length || '—')} />
-        <KpiTile label="Creatives" value={String((data.brand as any).distinct_creatives || (data.brand.creatives || []).length || '—')} />
-      </div>
-
-      {/* ── Brand Channels ────────────────────────────────────────── */}
-      {(data.brand.channels || []).length > 0 && (
-        <ReportTable<ChannelData>
-          columns={[
-            { key: 'name', header: 'Channel', render: r => r.name },
-            { key: 'impressions', header: 'Impressions', render: r => fmtNumber(r.impressions), align: 'right' },
-            { key: 'spend', header: 'Est. Spend', render: r => `$${fmtMoney(r.spend)}`, align: 'right' },
-            { key: 'share', header: 'Share', render: r => {
-              const total = data.brand.totalImpressions || 1;
-              return `${((r.impressions / total) * 100).toFixed(1)}%`;
-            }, align: 'right' },
-          ]}
-          rows={data.brand.channels || []}
-          getKey={r => r.name}
-        />
-      )}
-
-      {/* ── Brand Creatives ───────────────────────────────────────── */}
-      {(data.brand.creatives || []).length > 0 && (
-        <>
-          <SectionDivider label="Brand Creatives" />
-          <div className="aidl-kpi-row">
-            {(data.brand.creatives || []).slice(0, 6).map(c =>
-              c.url ? (
-                <AssetPreview
-                  key={c.id}
-                  type="image"
-                  url={c.url}
-                  label={c.channelName || undefined}
-                />
-              ) : null
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── Competitor Comparison Table ────────────────────────────── */}
-      <SectionDivider label="Competitor Comparison" />
+      {/* ── Comparison Table (brand + competitors) ─────────────────── */}
+      <SectionDivider label="Campaign Comparison" />
       <ReportTable<CampaignData>
         columns={[
-          { key: 'domain', header: 'Advertiser', render: r => r.domain },
+          { key: 'domain', header: 'Advertiser', render: r =>
+            r.domain === data.brand.domain
+              ? <><strong>{r.domain}</strong> <StatusBadge status="info" label="Brand" /></>
+              : r.domain
+          },
           { key: 'impressions', header: 'Impressions', render: r => fmtNumber(r.totalImpressions), align: 'right' },
           { key: 'spend', header: 'Est. Spend', render: r => `$${fmtMoney(r.totalSpend)}`, align: 'right' },
           { key: 'cpm', header: 'CPM', render: r => r.totalImpressions > 0 ? `$${((r.totalSpend / r.totalImpressions) * 1000).toFixed(2)}` : '—', align: 'right' },
           { key: 'channels', header: 'Channels', render: r => (r.channels || []).map(c => c.name).join(', ') || '—' },
+          { key: 'sov', header: 'SOV', render: r => {
+            const totalImps = allDomains.reduce((s, d) => s + d.totalImpressions, 0) || 1;
+            return `${((r.totalImpressions / totalImps) * 100).toFixed(1)}%`;
+          }, align: 'right' },
         ]}
         rows={allDomains}
         getKey={r => r.domain}
       />
 
-      {/* ── Per-Competitor Creative Previews ───────────────────────── */}
-      {(data.competitors || []).filter(c => (c.creatives || []).length > 0).length > 0 && (
+      {/* ── Creatives ─────────────────────────────────────────────── */}
+      {allDomains.some(d => (d.creatives || []).length > 0) && (
         <>
-          <SectionDivider label="Competitor Creatives" />
-          {(data.competitors || []).map(comp => {
+          <SectionDivider label="Ad Creatives" />
+          {allDomains.map(comp => {
             const creatives = (comp.creatives || []).filter(c => c.url);
             if (creatives.length === 0) return null;
+            const label = comp.domain === data.brand.domain ? `${comp.domain} (Brand)` : comp.domain;
             return (
-              <div key={comp.domain} style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: 'var(--text)', margin: '0 0 0.5rem', fontSize: '0.875rem' }}>{comp.domain}</h4>
-                <div className="aidl-kpi-row">
-                  {creatives.slice(0, 4).map(c => (
-                    <AssetPreview key={c.id} type="image" url={c.url} label={c.channelName || undefined} />
+              <div key={comp.domain} style={{ marginBottom: '1rem' }}>
+                <h4 style={{ color: 'var(--text)', margin: '0 0 0.5rem', fontSize: '0.875rem' }}>{label}</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {creatives.slice(0, 6).map(c => (
+                    <AssetPreview
+                      key={c.id}
+                      type={isVideoUrl(c.url) ? 'url' : 'image'}
+                      url={c.url}
+                      label={isVideoUrl(c.url) ? 'Video Ad' : undefined}
+                    />
                   ))}
                 </div>
               </div>
@@ -126,7 +89,7 @@ export function CcrReport({ data }: Props) {
         </>
       )}
 
-      {/* ── Strategic Analysis (LLM Narrative) ────────────────────── */}
+      {/* ── Strategic Analysis ────────────────────────────────────── */}
       {narrativeHtml && (
         <>
           <SectionDivider label="Strategic Analysis" />
@@ -138,8 +101,6 @@ export function CcrReport({ data }: Props) {
     </div>
   );
 }
-
-// ── Formatting ──────────────────────────────────────────────────────────────
 
 function fmtNumber(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
