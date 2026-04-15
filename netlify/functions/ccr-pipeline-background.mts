@@ -15,7 +15,7 @@ import type { Config } from '@netlify/functions';
 import { createLLMProvider } from '@AiDigital-com/design-system/server';
 import { createClient } from '@supabase/supabase-js';
 import { getCompetitorDomains } from './_shared/dataforseo.js';
-import { getAdClarityData } from './_shared/bigquery.js';
+import { getAdClarityData, discoverAdCompetitors } from './_shared/bigquery.js';
 import { scrapeUrl } from './_shared/firecrawl.js';
 import { log } from './_shared/logger.js';
 import type { CcrReportData, CampaignData } from '../../src/lib/types.js';
@@ -80,14 +80,26 @@ export default async (req: Request) => {
       meta: { brand_domain },
     });
 
-    // ── Step 1: Discover competitors ─────────────────────────────────────────
+    // ── Step 1: Discover competitors (DataForSeo + AdClarity) ─────────────
     await setStep('Discovering competitors…');
-    let competitorDomains: string[] = [];
-    try {
-      competitorDomains = await getCompetitorDomains(brand_domain);
-    } catch (err) {
-      console.warn('DataForSeo failed, continuing without search competitors:', err);
+
+    // Two parallel signals: SEO competitors + ad-spend competitors
+    const [seoCompetitors, adCompetitors] = await Promise.allSettled([
+      getCompetitorDomains(brand_domain).catch(() => [] as string[]),
+      discoverAdCompetitors(brand_domain, 10),
+    ]);
+
+    const seoDomains = seoCompetitors.status === 'fulfilled' ? seoCompetitors.value : [];
+    const adDomains = adCompetitors.status === 'fulfilled' ? adCompetitors.value : [];
+
+    // Merge: ad competitors first (they have data), then SEO competitors
+    const seen = new Set<string>([brand_domain.toLowerCase()]);
+    const competitorDomains: string[] = [];
+    for (const d of [...adDomains, ...seoDomains]) {
+      const lower = d.toLowerCase();
+      if (!seen.has(lower)) { seen.add(lower); competitorDomains.push(lower); }
     }
+    console.log(`Competitors: ${adDomains.length} ad + ${seoDomains.length} SEO → ${competitorDomains.length} unique`);
 
     // ── Step 2: AdClarity (BQ query → Supabase training → BQ scan) ────────
     await setStep('Fetching ad intelligence…');

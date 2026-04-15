@@ -174,6 +174,40 @@ async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> 
   }).filter(d => d.totalImpressions > 0);
 }
 
+/**
+ * Discover top ad competitors from AdClarity data.
+ * Returns domain names sorted by impressions (descending), excluding the brand.
+ * Uses Supabase training data when BQ queries aren't available.
+ */
+export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<string[]> {
+  const brand = brandDomain.toLowerCase();
+
+  // Try Supabase training data first (fast)
+  try {
+    const sb = createSupabase(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const { data: rows } = await sb
+      .from('ccr_training_data')
+      .select('advertiser_domain, data')
+      .eq('data_type', 'summary')
+      .neq('advertiser_domain', brand);
+
+    if (rows && rows.length > 0) {
+      return rows
+        .map(r => ({ domain: r.advertiser_domain, impressions: Number(r.data?.impressions) || 0 }))
+        .sort((a, b) => b.impressions - a.impressions)
+        .slice(0, limit)
+        .map(r => r.domain);
+    }
+  } catch (err) {
+    console.log('[discoverAdCompetitors] Supabase failed:', (err as Error).message);
+  }
+
+  return [];
+}
+
 // ── BQ scan mode (getRows scan — Data Viewer only, slowest) ─────────────────
 
 async function trainingMode(domains: string[]): Promise<CampaignData[]> {
