@@ -168,7 +168,16 @@ async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> 
         .sort((a: any, b: any) => b.impressions - a.impressions)
         .slice(0, 10),
       creatives: crvs
-        .map((r: any) => ({ id: String(r.creative_id || ''), url: r.creative_url_supplier || r.url || '', mimeType: r.creative_mime_type || '', channelName: '', firstSeen: r.creative_first_seen || '' }))
+        .map((r: any) => ({
+          id: String(r.creative_id || ''),
+          url: r.creative_url_supplier || r.url || '',
+          mimeType: r.creative_mime_type || '',
+          channelName: '',
+          firstSeen: r.creative_first_seen || '',
+          impressions: Number(r.impressions) || 0,
+          spend: Number(r.spend) || 0,
+          campaignName: r.all_campaigns || '',
+        }))
         .slice(0, 20),
     };
   }).filter(d => d.totalImpressions > 0);

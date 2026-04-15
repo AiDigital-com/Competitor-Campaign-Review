@@ -21,6 +21,9 @@ export interface CreativeData {
   mimeType: string;
   channelName: string;
   firstSeen: string;
+  impressions?: number;
+  spend?: number;
+  campaignName?: string;
 }
 
 export interface CampaignData {
