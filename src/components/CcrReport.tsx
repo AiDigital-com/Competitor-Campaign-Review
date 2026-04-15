@@ -12,7 +12,7 @@ import {
   StatusBadge,
 } from '@AiDigital-com/design-system';
 import { renderMarkdown } from '@AiDigital-com/design-system/utils';
-import type { CcrReportData, CampaignData, CreativeData } from '../lib/types';
+import type { CcrReportData, CampaignData, CreativeData, ActionItem } from '../lib/types';
 
 interface Props {
   data: CcrReportData;
@@ -20,6 +20,35 @@ interface Props {
 
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.includes('_video.');
+}
+
+function ActionColumn({ title, items }: { title: string; items: ActionItem[] }) {
+  if (!items.length) return null;
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 'var(--radius-sm, 8px)',
+      background: 'var(--surface)', overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '0.5rem 0.75rem', fontWeight: 600, fontSize: '0.8rem',
+        color: 'var(--text)', borderBottom: '1px solid var(--border)',
+        background: 'var(--surface2)',
+      }}>{title}</div>
+      {items.map((item, i) => (
+        <div key={i} style={{
+          padding: '0.5rem 0.75rem',
+          borderBottom: i < items.length - 1 ? '1px solid var(--border)' : undefined,
+        }}>
+          <div style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text)', marginBottom: '0.25rem' }}>
+            {item.action}
+          </div>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            {item.rationale}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function fmtNumber(n: number): string {
@@ -215,8 +244,32 @@ export function CcrReport({ data }: Props) {
         </>
       )}
 
-      {/* ── Strategic Analysis ────────────────────────────────────── */}
-      {narrativeHtml && (
+      {/* ── Executive Summary ─────────────────────────────────────── */}
+      {(data.insights?.executiveSummary || narrativeHtml) && (
+        <>
+          <SectionDivider label="Executive Summary" />
+          <div className="aidl-report-viewer">
+            <div className="aidl-report-content"
+              dangerouslySetInnerHTML={{ __html: data.insights?.executiveSummary || narrativeHtml }}
+            />
+          </div>
+        </>
+      )}
+
+      {/* ── Action Items (3 columns) ──────────────────────────────── */}
+      {data.insights && (data.insights.creativeActions?.length || data.insights.spendingActions?.length || data.insights.channelActions?.length) && (
+        <>
+          <SectionDivider label="Recommended Actions" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <ActionColumn title="Creatives" items={data.insights.creativeActions || []} />
+            <ActionColumn title="Spending" items={data.insights.spendingActions || []} />
+            <ActionColumn title="Channels" items={data.insights.channelActions || []} />
+          </div>
+        </>
+      )}
+
+      {/* ── Fallback narrative (if no structured insights) ─────────── */}
+      {!data.insights && narrativeHtml && (
         <>
           <SectionDivider label="Strategic Analysis" />
           <div className="aidl-report-viewer">

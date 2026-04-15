@@ -38,9 +38,22 @@ export interface CampaignData {
   scrapedDescription?: string | null;
 }
 
+export interface ActionItem {
+  action: string;
+  rationale: string;
+}
+
+export interface CcrInsights {
+  executiveSummary: string;
+  creativeActions: ActionItem[];
+  spendingActions: ActionItem[];
+  channelActions: ActionItem[];
+}
+
 export interface CcrReportData {
   brand: CampaignData;
   competitors: CampaignData[];
   narrative: string;
+  insights?: CcrInsights;
   generatedAt: string;
 }

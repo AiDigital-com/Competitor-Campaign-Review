@@ -18,7 +18,7 @@ import { getCompetitorDomains } from './_shared/dataforseo.js';
 import { getAdClarityData, discoverAdCompetitors } from './_shared/bigquery.js';
 import { scrapeUrl } from './_shared/firecrawl.js';
 import { log } from './_shared/logger.js';
-import type { CcrReportData, CampaignData } from '../../src/lib/types.js';
+import type { CcrReportData, CampaignData, CcrInsights } from '../../src/lib/types.js';
 
 const APP_NAME = 'competitor-campaign-review';
 
@@ -169,47 +169,56 @@ export default async (req: Request) => {
     // ── Step 4: LLM narrative ────────────────────────────────────────────────
     await setStep('Generating strategic analysis…');
 
-    console.log('[Step 4] brandData keys:', Object.keys(brandData));
-    console.log('[Step 4] brandData.channels:', JSON.stringify(brandData.channels)?.slice(0, 200));
-    console.log('[Step 4] brandData.publishers:', JSON.stringify(brandData.publishers)?.slice(0, 200));
-    console.log('[Step 4] competitors count:', competitorsData.length);
-    competitorsData.forEach((c, i) => {
-      console.log(`[Step 4] competitor[${i}] ${c.domain} keys:`, Object.keys(c), 'channels:', Array.isArray(c.channels), 'publishers:', Array.isArray(c.publishers));
-    });
+    const analysisContext = buildAnalysisContext(brand_domain, brandData, competitorsData);
+    const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'analysis', { supabase });
 
-    const narrativeContext = buildNarrativeContext(brand_domain, brandData, competitorsData);
-    console.log('[Step 4] narrativeContext built OK, length:', narrativeContext.length);
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    console.log('[Step 4] GEMINI_API_KEY present:', !!apiKey);
-    const llm = createLLMProvider('gemini', apiKey!, 'analysis', { supabase });
-
-    const narrativeResult = await llm.generateContent({
-      system: `You are a competitive intelligence analyst specializing in digital advertising strategy.
-Write concise, actionable insights for marketing professionals.
-Format with markdown headers (##) and bullet points. Max 600 words.`,
-      userParts: [{ text: narrativeContext }],
-      app: `${APP_NAME}:narrative`,
+    const insightsResult = await llm.generateContent({
+      system: `You are a competitive intelligence analyst specializing in digital advertising and creative strategy.
+Return ONLY valid JSON matching this structure — no markdown, no code fences:
+{
+  "executiveSummary": "One paragraph (3-5 sentences). Compare the brand's creative performance to competitors with similar budget/channel mix. Reference specific numbers (impressions, spend, CPM). Highlight creative volume and format differences.",
+  "creativeActions": [{"action": "short directive", "rationale": "data-backed reason"}],
+  "spendingActions": [{"action": "short directive", "rationale": "data-backed reason"}],
+  "channelActions": [{"action": "short directive", "rationale": "data-backed reason"}]
+}
+Rules:
+- executiveSummary: Focus on brand vs closest competitor by spend. Compare creative formats (video/display/social/CTV), volume, and CPM efficiency.
+- creativeActions: 2-3 actions on creative strategy (format mix, messaging gaps, volume vs. competition).
+- spendingActions: 2-3 actions on budget allocation (where to increase/decrease spend, CPM optimization).
+- channelActions: 2-3 actions on channel strategy (underweight/overweight channels vs. competition).
+- Every rationale MUST cite specific numbers from the data.`,
+      userParts: [{ text: analysisContext }],
+      app: `${APP_NAME}:insights`,
       userId: userId ?? undefined,
-      maxTokens: 1024,
+      maxTokens: 2048,
+      jsonMode: true,
     });
-    console.log('[Step 4] LLM response received, text length:', narrativeResult.text?.length);
 
-    log.info('ccr-pipeline.narrative', {
+    let insights: CcrInsights | undefined;
+    try {
+      insights = JSON.parse(insightsResult.text) as CcrInsights;
+    } catch {
+      const match = insightsResult.text.match(/\{[\s\S]*\}/);
+      if (match) try { insights = JSON.parse(match[0]) as CcrInsights; } catch {}
+    }
+    const narrative = insights?.executiveSummary || insightsResult.text;
+
+    log.info('ccr-pipeline.insights', {
       function_name: 'ccr-pipeline-background',
       user_id: userId,
       ai_provider: llm.provider,
       ai_model: llm.model,
-      ai_input_tokens: narrativeResult.usage?.inputTokens,
-      ai_output_tokens: narrativeResult.usage?.outputTokens,
-      ai_total_tokens: narrativeResult.usage?.totalTokens,
+      ai_input_tokens: insightsResult.usage?.inputTokens,
+      ai_output_tokens: insightsResult.usage?.outputTokens,
+      ai_total_tokens: insightsResult.usage?.totalTokens,
     });
 
     // ── Step 5: Save report ──────────────────────────────────────────────────
     const reportData: CcrReportData = {
       brand: brandData,
       competitors: competitorsData,
-      narrative: narrativeResult.text,
+      narrative,
+      insights,
       generatedAt: new Date().toISOString(),
     };
 
@@ -281,33 +290,46 @@ function fmtM(n: number): string {
   return String(n);
 }
 
-function buildNarrativeContext(
+function buildAnalysisContext(
   brand: string,
   brandData: CampaignData,
   competitors: CampaignData[],
 ): string {
-  const brandChannels = (brandData.channels || []).map(c => `${c.name}: ${fmtM(c.impressions)} imps`).join(', ') || 'No channel data';
-  const competitorSummaries = competitors.map(c =>
-    `${c.domain}: ${fmtM(c.totalImpressions)} imps, $${fmtM(c.totalSpend)} spend — channels: ${(c.channels || []).map(ch => ch.name).join(', ') || 'none'}`
-  ).join('\n');
+  const fmtChannels = (d: CampaignData) =>
+    (d.channels || []).map(c => `${c.name}: ${fmtM(c.impressions)} imps ($${fmtM(c.spend)})`).join(', ') || 'none';
 
-  return `Analyze the competitive advertising landscape for "${brand}" and provide strategic recommendations.
+  const fmtCreatives = (d: CampaignData) =>
+    (d.creatives || []).slice(0, 5).map(c => {
+      const camp = (c.campaignName || (c as any).all_campaigns || '').replace(/\s+\d{7,}$/, '');
+      const isVideo = (c.url || '').includes('video') || (c.url || '').endsWith('.mp4');
+      return `  - ${isVideo ? 'VIDEO' : 'IMAGE'}: ${fmtM(c.impressions || 0)} imps, $${fmtM(c.spend || 0)} | campaign: "${camp}" | since: ${c.firstSeen || '?'}`;
+    }).join('\n') || '  (no creatives)';
 
-BRAND: ${brand}
-- Total Impressions: ${fmtM(brandData.totalImpressions)}
-- Estimated Spend: $${fmtM(brandData.totalSpend)}
-- Active Channels: ${brandChannels}
-- Active Publishers: ${(brandData.publishers || []).slice(0, 5).map(p => p.domain).join(', ') || 'None found'}
+  const cpm = (d: CampaignData) => d.totalImpressions > 0 ? `$${((d.totalSpend / d.totalImpressions) * 1000).toFixed(2)}` : 'N/A';
 
-TOP COMPETITORS:
-${competitorSummaries || 'No competitor ad data found in AdClarity dataset.'}
+  const all = [brandData, ...competitors];
+  const totalImps = all.reduce((s, d) => s + d.totalImpressions, 0) || 1;
 
-Provide a strategic analysis covering:
-1. Share of voice assessment
-2. Channel strategy gaps
-3. Publisher opportunities competitors are exploiting
-4. Creative and messaging recommendations
-5. Budget prioritization suggestions
+  const brandBlock = `BRAND: ${brand}
+- Impressions: ${fmtM(brandData.totalImpressions)} (SOV: ${((brandData.totalImpressions / totalImps) * 100).toFixed(1)}%)
+- Spend: $${fmtM(brandData.totalSpend)} | CPM: ${cpm(brandData)}
+- Channels: ${fmtChannels(brandData)}
+- Top Creatives:
+${fmtCreatives(brandData)}`;
 
-Be specific and actionable. Reference the actual data above.`;
+  const compBlocks = competitors.map(c => `${c.domain}:
+- Impressions: ${fmtM(c.totalImpressions)} (SOV: ${((c.totalImpressions / totalImps) * 100).toFixed(1)}%)
+- Spend: $${fmtM(c.totalSpend)} | CPM: ${cpm(c)}
+- Channels: ${fmtChannels(c)}
+- Top Creatives:
+${fmtCreatives(c)}`).join('\n\n');
+
+  return `Competitive advertising analysis for "${brand}" — 3-month rolling window.
+
+${brandBlock}
+
+COMPETITORS:
+${compBlocks || 'No competitor data.'}
+
+Analyze this data and return structured JSON insights.`;
 }

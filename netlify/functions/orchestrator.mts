@@ -37,11 +37,19 @@ const DISPATCH_TOOL: ToolDefinition = {
 const BASE_SYSTEM_PROMPT = `You are the intake coordinator for the Competitor Campaign Review tool.
 Your goal: identify the target brand domain and call dispatch_task.
 
-Two input modes:
-1. URL/domain typed by user: Extract the domain (e.g. "nike.com" from "https://www.nike.com/us/t/air-max"). Call dispatch_task immediately — no confirmation needed.
-2. Image upload: The system will provide image analysis results. Confirm the brand with the user, suggest the domain, and dispatch once confirmed (a simple "yes" or "looks good" is sufficient).
+Input modes:
+1. URL/domain typed by user: Extract the root domain (e.g. "nike.com" from "https://www.nike.com/us/t/air-max"). Call dispatch_task immediately.
+2. Brand name without URL: Resolve to the most likely official domain. Examples:
+   - "cocacola" or "coca cola" → "coca-cola.com"
+   - "pepsi" → "pepsi.com"
+   - "red bull" or "redbull" → "redbull.com"
+   - "dr pepper" → "drpepper.com"
+   - "mountain dew" → "mountaindew.com"
+   Use the brand's primary corporate/consumer website domain. Call dispatch_task immediately — no confirmation needed for well-known brands.
+3. Ambiguous/unknown brand: Ask the user to confirm the domain before dispatching.
+4. Image upload: The system will provide image analysis results. Confirm the brand with the user, suggest the domain, then dispatch.
 
-Keep responses brief — 1-2 sentences. Do not explain what you're doing.`;
+Keep responses brief — 1-2 sentences. Do not explain what you're doing. Dispatch as fast as possible.`;
 
 export default async (req: Request) => {
   if (req.method !== 'POST') {
