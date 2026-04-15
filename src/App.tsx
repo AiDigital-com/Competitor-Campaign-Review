@@ -141,7 +141,7 @@ function AppContent({
   handlersRef, setSidebarSupabase,
 }: AppContentProps) {
   const [jobId, setJobId] = useState<string | null>(null)
-  const [reportData, setReportData] = useState<CcrReportData | null>(null)
+  const [reportData, setReportData] = useState<Record<string, any> | null>(null)
   const [dispatched, setDispatched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -206,23 +206,45 @@ function AppContent({
     endpoint: '/.netlify/functions/orchestrator',
   })
 
-  // Watch pipeline progress via Supabase Realtime
+  // Watch pipeline progress via Supabase Realtime on job_status (for progress step text)
   const jobStatus = useJobStatus(supabase, jobId)
 
-  // Parse report when pipeline completes
+  // Progressive rendering: subscribe to ccr_sessions.report_data changes
+  // Each Lambda writes its section → frontend re-renders with ReportBlock shields
   useEffect(() => {
-    if (jobStatus?.status === 'complete' && jobStatus.report && !reportData) {
-      try {
-        setReportData(JSON.parse(jobStatus.report))
-      } catch (err) {
-        console.error('Failed to parse report:', err)
-        setError('Failed to parse report data.')
-      }
-    }
+    if (!supabase || !jobId) return
+
+    // Initial fetch
+    supabase.from(SESSION_TABLE).select('report_data, status')
+      .eq('id', jobId).single()
+      .then(({ data }) => {
+        if (data?.report_data) setReportData(data.report_data)
+        if (data?.status === 'error') setError('Pipeline failed.')
+      })
+
+    // Subscribe to updates
+    const channel = supabase.channel(`ccr-report-${jobId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: SESSION_TABLE,
+        filter: `id=eq.${jobId}`,
+      }, (payload: any) => {
+        const newData = payload.new
+        if (newData.report_data) setReportData(newData.report_data)
+        if (newData.status === 'error') setError('Pipeline failed.')
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, jobId])
+
+  // Also check job_status for errors
+  useEffect(() => {
     if (jobStatus?.status === 'error') {
       setError(jobStatus.error ?? 'Pipeline failed. Please try again.')
     }
-  }, [jobStatus, reportData])
+  }, [jobStatus])
 
   // Wire sidebar handlers
   useEffect(() => {
@@ -292,58 +314,48 @@ function AppContent({
 
   return (
     <>
-      {/* Phase 1: Chat + Upload (pre-report) */}
-      {!reportData && (
-        <>
-          <ChatPanel
-            messages={orchestrator.messages}
-            streaming={orchestrator.streaming}
-            error={error ?? orchestrator.error}
-            onSend={handleSend}
-            asset={imageUpload.result}
-            inputPrefix={!dispatched ? (
-              <UploadZone
-                onFile={(file) => imageUpload.upload(file)}
-                onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
-                onClear={imageUpload.clear}
-                preview={imageUpload.previewUrl}
-                uploading={imageUpload.uploading}
-                error={imageUpload.error}
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                fileLabel="Drop a campaign image or enter a URL"
-              />
-            ) : undefined}
-            welcomeTitle="Competitor Campaign Review"
-            welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
-            placeholder={
-              imageUpload.result
-                ? 'Image ready — press enter to analyze…'
-                : 'Enter a brand URL or describe the campaign…'
-            }
-          />
-
-          {/* Pipeline progress */}
-          {dispatched && (
-            <div className="ccr-progress">
-              <div className="ccr-progress__spinner" />
-              <p className="ccr-progress__step">
-                {progressStep ?? 'Starting analysis…'}
-              </p>
-            </div>
+      {/* Chat + Upload (pre-dispatch only) */}
+      {!dispatched && (
+        <ChatPanel
+          messages={orchestrator.messages}
+          streaming={orchestrator.streaming}
+          error={error ?? orchestrator.error}
+          onSend={handleSend}
+          asset={imageUpload.result}
+          inputPrefix={(
+            <UploadZone
+              onFile={(file) => imageUpload.upload(file)}
+              onUrl={(url) => orchestrator.sendMessage(`Analyze this campaign URL: ${url}`)}
+              onClear={imageUpload.clear}
+              preview={imageUpload.previewUrl}
+              uploading={imageUpload.uploading}
+              error={imageUpload.error}
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              fileLabel="Drop a campaign image or enter a URL"
+            />
           )}
-        </>
+          welcomeTitle="Competitor Campaign Review"
+          welcomeDescription="Analyze competitor campaigns, creative strategies, and messaging. Drop a campaign image or type a brand URL to begin."
+          placeholder={
+            imageUpload.result
+              ? 'Image ready — press enter to analyze…'
+              : 'Enter a brand URL or describe the campaign…'
+          }
+        />
       )}
 
-      {/* Phase 2: Full report with share bar + download */}
-      {reportData && (
+      {/* Progressive report: renders as soon as any data arrives */}
+      {dispatched && (
         <div className="ccr-report-page">
           <div className="ccr-report-bar">
-            <DownloadBar
-              reportText={reportData.narrative || ''}
-              title={`CCR — ${reportData.brand?.domain || 'Report'}`}
-              visualSelector=".ccr-report"
-            />
-            {supabase && activeSessionId && (
+            {reportData?.narrative && (
+              <DownloadBar
+                reportText={reportData.narrative || ''}
+                title={`CCR — ${reportData.brand?.domain || 'Report'}`}
+                visualSelector=".ccr-report"
+              />
+            )}
+            {supabase && activeSessionId && reportData?.phase === 'complete' && (
               <ConnectedShareBar
                 jobId={activeSessionId}
                 supabase={supabase}
@@ -352,7 +364,7 @@ function AppContent({
             )}
           </div>
           <div className="ccr-report-wrapper">
-            <CcrReport data={reportData} />
+            <CcrReport data={reportData || {}} />
           </div>
         </div>
       )}
