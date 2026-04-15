@@ -14,7 +14,24 @@ export default async (req: Request) => {
   const supabase = getSupabase();
 
   try {
-    await setStep(supabase, jobId, 'Discovering competitors…');
+    // Create job_status row (service role — frontend RLS blocks writes)
+    await supabase.from('job_status').upsert({
+      id: jobId,
+      app: 'competitor-campaign-review',
+      status: 'streaming',
+      meta: { current_step: 'Discovering competitors…' },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    // Ensure session row exists
+    await supabase.from('ccr_sessions').upsert({
+      id: sessionId,
+      user_id: userId,
+      brand_name: brandDomain,
+      status: 'processing',
+      job_id: jobId,
+      deleted_by_user: false,
+    }, { onConflict: 'id' });
 
     // Two parallel signals: SEO competitors + ad-spend competitors
     const [seoResult, adResult] = await Promise.allSettled([

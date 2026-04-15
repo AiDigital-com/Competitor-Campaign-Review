@@ -198,16 +198,8 @@ function AppContent({
     }
 
     // Insert first pipeline task (N-Lambda architecture)
-    // Also create job_status row so frontend can track progress via Realtime
+    // job_status created by ccr-discover Lambda (service role — frontend RLS blocks writes)
     if (supabase) {
-      await supabase.from('job_status').upsert({
-        id: newJobId,
-        app: APP_NAME,
-        status: 'streaming',
-        meta: { current_step: 'Discovering competitors…' },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'id' })
-
       await supabase.from('pipeline_tasks').insert({
         scan_id: sessionId,
         app: APP_NAME,
