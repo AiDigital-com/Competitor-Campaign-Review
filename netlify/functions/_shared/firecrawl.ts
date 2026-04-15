@@ -39,10 +39,6 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult | null> {
       body: JSON.stringify({
         url: target,
         formats: ['markdown', 'screenshot'],
-        timeout: 15000,
-        waitFor: 1000,
-        // Limit markdown to 5k chars — we only need industry context
-        maxLength: 5000,
       }),
     });
 

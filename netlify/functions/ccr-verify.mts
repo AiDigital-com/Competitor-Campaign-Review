@@ -6,8 +6,8 @@
  */
 import type { Config } from '@netlify/functions';
 import { createLLMProvider } from '@AiDigital-com/design-system/server';
-import { createClient as createSupabase } from '@supabase/supabase-js';
 import { getSupabase, mergeReportData, setStep, insertTasks, markError, APP_NAME } from './_shared/pipeline.js';
+import { getCampaignDetail } from './_shared/bigquery.js';
 import { log } from './_shared/logger.js';
 
 export default async (req: Request) => {
@@ -60,52 +60,25 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
 
     console.log(`[verify] ${verified.length} candidates → ${keptDomains.length} kept`);
 
-    // Fetch campaign metadata for verified domains + brand (from training data)
-    const sb = createSupabase(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    // Fetch campaign detail for verified domains + brand
+    // Uses relational ccr_campaign_channel_detail table — LP URLs included naturally
     const allDomains = [brandDomain.toLowerCase(), ...keptDomains];
-    const { data: campRows } = await sb
-      .from('ccr_training_data')
-      .select('advertiser_domain, data')
-      .eq('data_type', 'adv_campaign_channel_summary')
-      .in('advertiser_domain', allDomains);
+    const campaignRows = await getCampaignDetail(allDomains, 100);
 
-    // Fetch landing page URLs from campaign_channel_detail (actual LP URLs from raw BQ)
-    const { data: detailRows } = await sb
-      .from('ccr_training_data')
-      .select('advertiser_domain, data')
-      .eq('data_type', 'campaign_channel_detail')
-      .in('advertiser_domain', allDomains);
-
-    // Build campaign name → landing page URL map per domain
-    const lpByDomain: Record<string, Record<string, string>> = {};
-    for (const row of detailRows || []) {
-      const details = Array.isArray(row.data) ? row.data : [];
-      const byName: Record<string, string> = {};
-      for (const d of details) {
-        if (d.creative_campaign_name && d.landing_page_url && !byName[d.creative_campaign_name]) {
-          byName[d.creative_campaign_name] = d.landing_page_url.split('?')[0]; // strip UTMs
-        }
-      }
-      lpByDomain[row.advertiser_domain] = byName;
-    }
-
-    // Select top 3 campaigns per domain (by rank), attach landing page URL
-    // Campaign names differ by trailing ID suffix — match by prefix
+    // Group by domain, deduplicate by campaign name (take highest-impression row per campaign)
     const topCampaigns: Record<string, any[]> = {};
-    for (const row of campRows || []) {
-      const campaigns = Array.isArray(row.data) ? row.data : [];
-      const sorted = campaigns.sort((a: any, b: any) => (a.campaign_rank || 999) - (b.campaign_rank || 999));
-      const domainLPs = lpByDomain[row.advertiser_domain] || {};
-      const lpKeys = Object.keys(domainLPs);
-      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3).map((c: any) => {
-        let lp = domainLPs[c.creative_campaign_name];
-        if (!lp) {
-          const campBase = (c.creative_campaign_name || '').replace(/\s+\d{7,}$/, '');
-          const match = lpKeys.find(k => k.startsWith(campBase) || campBase.startsWith(k));
-          if (match) lp = domainLPs[match];
-        }
-        return { ...c, landing_page_url: lp || null };
-      });
+    for (const row of campaignRows) {
+      const d = row.advertiser_domain;
+      if (!topCampaigns[d]) topCampaigns[d] = [];
+      // Only keep first occurrence per campaign name (already sorted by impressions desc)
+      const campName = row.creative_campaign_name;
+      if (!topCampaigns[d].some((c: any) => c.creative_campaign_name === campName)) {
+        topCampaigns[d].push(row);
+      }
+    }
+    // Limit to top 3 per domain
+    for (const d of Object.keys(topCampaigns)) {
+      topCampaigns[d] = topCampaigns[d].slice(0, 3);
     }
 
     // Write verified state to report_data — comparison table can render now
