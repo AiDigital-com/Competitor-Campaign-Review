@@ -246,6 +246,9 @@ function AppContent({
     return () => { supabase.removeChannel(channel) }
   }, [supabase, jobId])
 
+  // Derive progress step from job_status (must be before useEffect that references it)
+  const progressStep = jobStatus?.meta?.current_step as string | undefined
+
   // Also check job_status for errors + refetch report_data on step changes
   // This is defense-in-depth: job_status Realtime is proven reliable across all apps,
   // so we piggyback on step changes to refetch ccr_sessions.report_data
@@ -325,9 +328,6 @@ function AppContent({
     imageUpload.clear()
     await orchestrator.sendMessage(text, sendAsset)
   }, [orchestrator, imageUpload])
-
-  // ── Progress message ──────────────────────────────────────────────────────
-  const progressStep = jobStatus?.meta?.current_step as string | undefined
 
   return (
     <>
