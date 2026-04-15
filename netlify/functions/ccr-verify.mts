@@ -61,7 +61,9 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
       verified = candidateDomains.map((d: string) => ({ domain: d, parentCompany: '', productLine: '', keep: true }));
     }
 
-    const keptDomains = verified.filter(c => c.keep).map(c => c.domain.toLowerCase());
+    // Exclude brand from competitor list — brand is classified for its productLine but isn't a competitor
+    const brandKey = brandDomain.toLowerCase();
+    const keptDomains = verified.filter(c => c.keep && c.domain.toLowerCase() !== brandKey).map(c => c.domain.toLowerCase());
     const annotations: Record<string, { parentCompany: string; productLine: string }> = {};
     for (const v of verified) {
       annotations[v.domain.toLowerCase()] = { parentCompany: v.parentCompany, productLine: v.productLine };

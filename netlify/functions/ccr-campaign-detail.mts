@@ -6,7 +6,7 @@
  */
 import type { Config } from '@netlify/functions';
 import { createLLMProvider } from '@AiDigital-com/design-system/server';
-import { getAdClarityData, getCampaignDetail } from './_shared/bigquery.js';
+import { getAdClarityData, getCampaignDetailExhaustive } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
   isPhase3DataComplete, markError, APP_NAME,
@@ -21,11 +21,13 @@ export default async (req: Request) => {
     await setStep(supabase, jobId, 'Fetching campaign detail…');
 
     // Full AdClarity data for brand + verified competitors
+    // Exhaustive fetch: windowed per-domain (50 campaigns each, single BQ scan)
+    // Gives LLM the full 3-month rolling window to classify, not a skimmed global top-N
     const brandKey = brandDomain.toLowerCase();
     const allDomains = [brandKey, ...verifiedDomains];
     const [adData, allCampaigns] = await Promise.all([
       getAdClarityData(allDomains),
-      getCampaignDetail(allDomains, 200),
+      getCampaignDetailExhaustive(allDomains, 50),
     ]);
 
     // Group campaigns by domain

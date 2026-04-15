@@ -85,21 +85,58 @@ export function CcrReport({ data }: Props) {
 
   const brand = data.brand as CampaignData | undefined;
   const competitors = (data.competitors || []) as CampaignData[];
-  const allDomains = brand ? [brand, ...competitors] : [];
+
+  // Progressive table: show summary metrics early (from discover/verify), swap to filtered (from campaign-detail)
+  const hasCampaigns = !!brand;
+  const summaries = data.summaries as Record<string, any> | undefined;
+  const verifiedDomains = data.verifiedDomains as string[] | undefined;
+  const annotations = data.annotations as Record<string, { parentCompany: string; productLine: string }> | undefined;
+  const brandDomain = data.brandDomain || brand?.domain || '';
+
+  // Build preliminary rows from summaries when filtered data hasn't arrived yet
+  const preliminaryRows: CampaignData[] = (!hasCampaigns && summaries && verifiedDomains)
+    ? [
+        // Brand row from summaries
+        ...(summaries[brandDomain] ? [{
+          domain: brandDomain,
+          totalImpressions: summaries[brandDomain].totalImpressions || 0,
+          totalSpend: summaries[brandDomain].totalSpend || 0,
+          channels: summaries[brandDomain].channels || [],
+          publishers: [], creatives: [],
+          parentCompany: annotations?.[brandDomain]?.parentCompany,
+          productLine: annotations?.[brandDomain]?.productLine,
+        }] : []),
+        // Competitor rows from summaries
+        ...verifiedDomains
+          .filter(d => summaries[d])
+          .map(d => ({
+            domain: d,
+            totalImpressions: summaries[d].totalImpressions || 0,
+            totalSpend: summaries[d].totalSpend || 0,
+            channels: summaries[d].channels || [],
+            publishers: [] as any[], creatives: [] as any[],
+            parentCompany: annotations?.[d]?.parentCompany,
+            productLine: annotations?.[d]?.productLine,
+          }))
+          .sort((a, b) => b.totalImpressions - a.totalImpressions)
+          .slice(0, 5),
+      ]
+    : [];
+
+  const allDomains = hasCampaigns ? [brand!, ...competitors] : preliminaryRows;
+  const hasTableData = allDomains.length > 0;
+  const isFiltered = hasCampaigns; // true = filtered metrics, false = summary metrics
   const totalImps = allDomains.reduce((s, d) => s + d.totalImpressions, 0) || 1;
   const isComplete = data.phase === 'complete';
-  const hasCampaigns = !!brand;
   const hasLandingPages = Array.isArray(data.landingPages);
   const hasPublishers = !!data.publishersByDomain;
   const hasInsights = !!data.insights;
-
-  const brandDomain = data.brandDomain || brand?.domain || '';
 
   return (
     <div className="ccr-report">
       <PageHeader
         title={`Campaign Intelligence: ${brandDomain}`}
-        subtitle={`${competitors.length} competitors · 3-month rolling window · ${data.generatedAt ? formatDate(data.generatedAt) : 'Analyzing…'}`}
+        subtitle={`${hasCampaigns ? competitors.length : (verifiedDomains?.length || '…')} competitors · 3-month rolling window · ${data.generatedAt ? formatDate(data.generatedAt) : 'Analyzing…'}`}
         meta={<StatusBadge status={isComplete ? 'complete' : 'info'} label={isComplete ? 'Analysis Complete' : 'Analyzing…'} />}
       />
 
@@ -117,15 +154,20 @@ export function CcrReport({ data }: Props) {
       </ReportBlock>
 
       {/* ── Comparison Table ───────────────────────────────────────── */}
-      <SectionDivider label="Campaign Comparison" />
+      <SectionDivider label={isFiltered ? 'Campaign Comparison (Filtered)' : 'Campaign Comparison'} />
       <ReportBlock
-        status={hasCampaigns ? 'ready' : 'loading'}
+        status={hasTableData ? 'ready' : 'loading'}
         loadingLabel="Fetching campaign data…"
       >
+        {!isFiltered && hasTableData && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.25rem 0 0.5rem', fontStyle: 'italic' }}>
+            Showing domain-level totals — filtering by product line…
+          </div>
+        )}
         <ReportTable<CampaignData>
           columns={[
             { key: 'domain', header: 'Advertiser', render: r => {
-              const isBrand = r.domain === brand?.domain;
+              const isBrand = r.domain === brandDomain;
               const sub = r.productLine || r.parentCompany;
               return (
                 <div>

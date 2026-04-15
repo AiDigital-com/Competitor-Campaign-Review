@@ -1,11 +1,12 @@
 /**
  * Lambda 3c: PUBLISHERS (parallel)
- * Fetches publisher breakdown for verified domains from training data.
+ * Fetches publisher breakdown for verified domains via unified data access layer.
+ * Uses BigQuery in production, Supabase relational tables in dev.
  * Writes publisher data to report_data.
  * Checks if siblings (3a, 3b) are complete → triggers synthesize.
  */
 import type { Config } from '@netlify/functions';
-import { createClient as createSupabase } from '@supabase/supabase-js';
+import { getPublisherData } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
   isPhase3DataComplete, markError,
@@ -19,32 +20,31 @@ export default async (req: Request) => {
   try {
     await setStep(supabase, jobId, 'Analyzing publishers…');
 
-    const sb = createSupabase(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     const allDomains = [brandDomain.toLowerCase(), ...verifiedDomains];
-
-    const { data: rows } = await sb
-      .from('ccr_training_data')
-      .select('advertiser_domain, data')
-      .eq('data_type', 'adv_publisher_channel_method')
-      .in('advertiser_domain', allDomains);
+    const rows = await getPublisherData(allDomains, 100);
 
     // Build publisher map: domain → top publishers (excluding "Other Publishers")
     const publishersByDomain: Record<string, any[]> = {};
-    for (const row of rows || []) {
-      const pubs = Array.isArray(row.data) ? row.data : [];
-      publishersByDomain[row.advertiser_domain] = pubs
-        .filter((p: any) => p.publisher_group !== 'Other Publishers')
-        .slice(0, 10)
-        .map((p: any) => ({
-          publisher: p.publisher_group,
-          transactionMethod: p.transaction_method,
-          impressions: p.impressions,
-          spend: p.spend,
-          displayImpressions: p.display_impressions,
-          videoImpressions: p.video_impressions,
-          socialImpressions: p.social_impressions,
-          ctvImpressions: p.ctv_impressions,
-        }));
+    for (const row of rows) {
+      const d = row.advertiser_domain;
+      if (!publishersByDomain[d]) publishersByDomain[d] = [];
+      if (row.publisher_group === 'Other Publishers') continue;
+      if (publishersByDomain[d].length >= 10) continue;
+      publishersByDomain[d].push({
+        publisher: row.publisher_group,
+        transactionMethod: row.transaction_method,
+        impressions: Number(row.impressions) || 0,
+        spend: Number(row.spend) || 0,
+        displayImpressions: Number(row.display_impressions) || 0,
+        videoImpressions: Number(row.video_impressions) || 0,
+        socialImpressions: Number(row.social_impressions) || 0,
+        ctvImpressions: Number(row.ctv_impressions) || 0,
+      });
+    }
+
+    // Ensure every domain has an entry (even if empty) so isPhase3DataComplete passes
+    for (const d of allDomains) {
+      if (!publishersByDomain[d]) publishersByDomain[d] = [];
     }
 
     console.log(`[publishers] ${Object.keys(publishersByDomain).length} domains with publisher data`);

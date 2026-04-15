@@ -246,12 +246,22 @@ function AppContent({
     return () => { supabase.removeChannel(channel) }
   }, [supabase, jobId])
 
-  // Also check job_status for errors
+  // Also check job_status for errors + refetch report_data on step changes
+  // This is defense-in-depth: job_status Realtime is proven reliable across all apps,
+  // so we piggyback on step changes to refetch ccr_sessions.report_data
   useEffect(() => {
     if (jobStatus?.status === 'error') {
       setError(jobStatus.error ?? 'Pipeline failed. Please try again.')
     }
-  }, [jobStatus])
+    // Refetch report_data whenever pipeline step changes (defensive progressive rendering)
+    if (supabase && jobId && progressStep) {
+      supabase.from(SESSION_TABLE).select('report_data')
+        .eq('id', jobId).single()
+        .then(({ data }) => {
+          if (data?.report_data) setReportData(data.report_data)
+        })
+    }
+  }, [jobStatus, supabase, jobId, progressStep])
 
   // Wire sidebar handlers
   useEffect(() => {

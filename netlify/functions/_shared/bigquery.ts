@@ -150,6 +150,67 @@ export async function getCampaignDetail(domains: string[], limit = 50): Promise<
 }
 
 /**
+ * Fetch ALL campaigns per domain for the 3-month rolling window.
+ * Uses ROW_NUMBER() windowed by domain so each domain gets fair coverage.
+ * Single BQ scan — no extra cost vs getCampaignDetail.
+ * Used by Lambda 3a for exhaustive LLM filtering.
+ */
+export async function getCampaignDetailExhaustive(domains: string[], perDomainLimit = 50): Promise<any[]> {
+  const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        WITH campaign_agg AS (
+          SELECT
+            LOWER(advertiser_domain) as advertiser_domain,
+            creative_campaign_name, channel_name,
+            advertiser_master_category, advertiser_second_category,
+            transaction_method,
+            ANY_VALUE(creative_landingpage_url) as landing_page_url,
+            SUM(impressions) as impressions, SUM(spend) as spend,
+            COUNT(DISTINCT creative_id) as creative_count,
+            COUNT(DISTINCT publisher_domain) as publisher_count,
+            MIN(creative_first_seen_date) as first_seen,
+            MAX(creative_last_seen_date) as last_seen
+          FROM ${rawTable()}
+          WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
+          GROUP BY 1,2,3,4,5,6
+        ),
+        ranked AS (
+          SELECT *, ROW_NUMBER() OVER (
+            PARTITION BY advertiser_domain ORDER BY impressions DESC
+          ) as domain_rank
+          FROM campaign_agg
+        )
+        SELECT * EXCEPT(domain_rank) FROM ranked
+        WHERE domain_rank <= @per_domain_limit
+        ORDER BY advertiser_domain, impressions DESC`,
+      params: { domains: lower, per_domain_limit: perDomainLimit },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('campaign-detail-exhaustive');
+    console.log(`[BQ] getCampaignDetailExhaustive: ${rows.length} rows across ${lower.length} domains (${perDomainLimit}/domain)`);
+    return rows.map(serializeDates);
+  }
+
+  // Supabase fallback: fetch per-domain with individual limits
+  const sb = getSupabase();
+  const results: any[] = [];
+  for (const d of lower) {
+    const { data } = await sb
+      .from('ccr_campaign_channel_detail')
+      .select('*')
+      .eq('advertiser_domain', d)
+      .order('impressions', { ascending: false })
+      .limit(perDomainLimit);
+    if (data) results.push(...data);
+  }
+  return results;
+}
+
+/**
  * Fetch creative detail for domains.
  */
 export async function getCreativeDetail(domains: string[], limit = 50): Promise<any[]> {
