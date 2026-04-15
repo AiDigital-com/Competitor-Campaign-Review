@@ -6,7 +6,7 @@
  */
 import type { Config } from '@netlify/functions';
 import { createLLMProvider } from '@AiDigital-com/design-system/server';
-import { getAdClarityData, getCampaignDetailExhaustive } from './_shared/bigquery.js';
+import { getAdClarityData, getCampaignDetailFull } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
   isPhase3DataComplete, markError, APP_NAME,
@@ -27,7 +27,7 @@ export default async (req: Request) => {
     const allDomains = [brandKey, ...verifiedDomains];
     const [adData, allCampaigns] = await Promise.all([
       getAdClarityData(allDomains),
-      getCampaignDetailExhaustive(allDomains, 50),
+      getCampaignDetailFull(allDomains),
     ]);
 
     // Group campaigns by domain
