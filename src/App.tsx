@@ -202,7 +202,14 @@ function AppContent({
     dispatchEventType: 'competitor_dispatch',
     dispatchDataKey: 'intakeSummary',
     sessionInsertFields: { status: 'chatting', deleted_by_user: false },
-    onSessionCreated: () => setRefreshKey(k => k + 1),
+    onSessionCreated: (id: string) => {
+      setSidebarItems(prev => {
+        if (prev.some(s => s.id === id)) return prev
+        return [{ id, title: 'New Review', status: 'chatting', createdAt: new Date().toISOString() } as AppSession, ...prev]
+      })
+      setActiveSessionId(id)
+      setRefreshKey(k => k + 1)
+    },
     endpoint: '/.netlify/functions/orchestrator',
   })
 
