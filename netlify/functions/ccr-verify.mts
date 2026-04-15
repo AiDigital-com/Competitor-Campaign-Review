@@ -69,12 +69,36 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
       .eq('data_type', 'adv_campaign_channel_summary')
       .in('advertiser_domain', allDomains);
 
-    // Select top 3 campaigns per domain (by rank)
+    // Fetch landing page URLs from campaign_channel_detail (actual LP URLs from raw BQ)
+    const { data: detailRows } = await sb
+      .from('ccr_training_data')
+      .select('advertiser_domain, data')
+      .eq('data_type', 'campaign_channel_detail')
+      .in('advertiser_domain', allDomains);
+
+    // Build campaign name → landing page URL map per domain
+    const lpByDomain: Record<string, Record<string, string>> = {};
+    for (const row of detailRows || []) {
+      const details = Array.isArray(row.data) ? row.data : [];
+      const byName: Record<string, string> = {};
+      for (const d of details) {
+        if (d.creative_campaign_name && d.landing_page_url && !byName[d.creative_campaign_name]) {
+          byName[d.creative_campaign_name] = d.landing_page_url.split('?')[0]; // strip UTMs
+        }
+      }
+      lpByDomain[row.advertiser_domain] = byName;
+    }
+
+    // Select top 3 campaigns per domain (by rank), attach landing page URL
     const topCampaigns: Record<string, any[]> = {};
     for (const row of campRows || []) {
       const campaigns = Array.isArray(row.data) ? row.data : [];
       const sorted = campaigns.sort((a: any, b: any) => (a.campaign_rank || 999) - (b.campaign_rank || 999));
-      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3);
+      const domainLPs = lpByDomain[row.advertiser_domain] || {};
+      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3).map((c: any) => ({
+        ...c,
+        landing_page_url: domainLPs[c.creative_campaign_name] || null,
+      }));
     }
 
     // Write verified state to report_data — comparison table can render now

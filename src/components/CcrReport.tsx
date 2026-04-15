@@ -174,13 +174,25 @@ export function CcrReport({ data }: Props) {
                 {Array.from(campaigns.entries()).map(([campName, campCreatives]) => {
                   const campImps = campCreatives.reduce((s, c) => s + (c.impressions || 0), 0);
                   const campSpend = campCreatives.reduce((s, c) => s + (c.spend || 0), 0);
+                  // Find landing page screenshot for this campaign
+                  const lp = (data.landingPages || []).find((l: any) =>
+                    l.domain === comp.domain && campaignName(l.campaignName) === campName
+                  );
                   return (
                     <div key={campName} style={{ minWidth: 220, maxWidth: 260, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm, 8px)', background: 'var(--surface)', overflow: 'hidden' }}>
                       <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={campName}>{campName}</div>
                       <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {campCreatives.slice(0, 3).map(c => (
+                        {/* Top 2 creatives */}
+                        {campCreatives.slice(0, 2).map(c => (
                           <AssetPreview key={c.id} type={isVideoUrl(c.url) ? 'video' : 'image'} url={c.url} />
                         ))}
+                        {/* Landing page screenshot as 3rd element */}
+                        {lp?.screenshotUrl && (
+                          <AssetPreview type="image" url={lp.screenshotUrl} label={lp.title || 'Landing Page'} />
+                        )}
+                        {lp && !lp.screenshotUrl && lp.url && (
+                          <AssetPreview type="url" url={lp.url} label={lp.title || 'Landing Page'} />
+                        )}
                       </div>
                       <div style={{ padding: '0.5rem 0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
                         {campImps > 0 && <span style={{ fontSize: '0.65rem', padding: '0.125rem 0.5rem', borderRadius: '999px', background: 'var(--surface2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{fmtNumber(campImps)} imps</span>}

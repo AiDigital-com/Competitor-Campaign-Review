@@ -1,8 +1,9 @@
 /**
  * Lambda 3b: FIRECRAWL (parallel)
- * Crawls top 3 landing pages per brand, extracts messaging/CTA/offers.
- * Writes landing page insights to report_data.
- * Checks if siblings (3a, 3c) are complete → triggers synthesize.
+ * Crawls actual campaign landing pages (from campaign_channel_detail URLs).
+ * Saves full output: screenshot, title, description, markdown content.
+ * Screenshot shows as 3rd element in campaign card (after top 2 creatives).
+ * Markdown content feeds into Lambda 4 SYNTHESIZE for LLM analysis.
  */
 import type { Config } from '@netlify/functions';
 import { scrapeUrl } from './_shared/firecrawl.js';
@@ -11,7 +12,6 @@ import {
   isPhase3DataComplete, markError,
 } from './_shared/pipeline.js';
 
-
 interface LandingPageInsight {
   url: string;
   campaignName: string;
@@ -19,6 +19,7 @@ interface LandingPageInsight {
   title?: string;
   description?: string;
   screenshotUrl?: string;
+  markdown?: string;
 }
 
 export default async (req: Request) => {
@@ -28,16 +29,14 @@ export default async (req: Request) => {
   try {
     await setStep(supabase, jobId, 'Crawling landing pages…');
 
-    // Collect unique landing page URLs from top 3 campaigns per domain
+    // Collect actual campaign landing page URLs from topCampaigns (attached by ccr-verify)
     const allDomains = [brandDomain.toLowerCase(), ...verifiedDomains];
     const crawlTargets: { url: string; campaignName: string; domain: string }[] = [];
 
     for (const domain of allDomains) {
       const campaigns = topCampaigns?.[domain] || [];
       for (const camp of campaigns.slice(0, 3)) {
-        // Landing page comes from campaign_channel_detail training data
-        // For now, construct from domain if not available
-        const lpUrl = camp.landing_page_url || `https://${domain}`;
+        const lpUrl = camp.landing_page_url;
         if (lpUrl && !crawlTargets.some(t => t.url === lpUrl)) {
           crawlTargets.push({
             url: lpUrl,
@@ -48,9 +47,10 @@ export default async (req: Request) => {
       }
     }
 
-    // Crawl in parallel (max 10 to avoid rate limits)
-    const targets = crawlTargets.slice(0, 10);
+    // Crawl in parallel (max 12 — top 3 campaigns × ~4 brands with LP data)
+    const targets = crawlTargets.slice(0, 12);
     console.log(`[firecrawl] Crawling ${targets.length} landing pages`);
+    targets.forEach(t => console.log(`  ${t.domain}: ${t.url.substring(0, 80)}`));
 
     const results = await Promise.allSettled(
       targets.map(async (target) => {
@@ -62,6 +62,7 @@ export default async (req: Request) => {
           title: scrape?.title || undefined,
           description: scrape?.description || undefined,
           screenshotUrl: scrape?.screenshotUrl || undefined,
+          markdown: scrape?.markdown?.substring(0, 3000) || undefined, // cap for payload size
         } as LandingPageInsight;
       })
     );
@@ -70,9 +71,10 @@ export default async (req: Request) => {
       .filter((r): r is PromiseFulfilledResult<LandingPageInsight> => r.status === 'fulfilled')
       .map(r => r.value);
 
-    console.log(`[firecrawl] ${landingPages.length}/${targets.length} pages crawled successfully`);
+    console.log(`[firecrawl] ${landingPages.length}/${targets.length} pages crawled`);
+    landingPages.forEach(lp => console.log(`  ${lp.domain}: title="${lp.title?.substring(0, 50)}" screenshot=${!!lp.screenshotUrl}`));
 
-    // Track Firecrawl API cost (1 unit = 1 page scrape)
+    // Track Firecrawl API cost
     if (landingPages.length > 0) {
       const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
       const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
@@ -84,10 +86,8 @@ export default async (req: Request) => {
       }).catch(() => {});
     }
 
-    // Write to report_data — landing page shields transform to content
-    await mergeReportData(supabase, jobId, {
-      landingPages,
-    });
+    // Write to report_data
+    await mergeReportData(supabase, jobId, { landingPages });
 
     // Check if all Phase 3 data is present → trigger synthesize
     if (await isPhase3DataComplete(supabase, jobId)) {
