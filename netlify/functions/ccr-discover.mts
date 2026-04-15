@@ -29,6 +29,18 @@ export default async (req: Request) => {
     const seoDomains = seoResult.status === 'fulfilled' ? seoResult.value : [];
     const adDomains = adResult.status === 'fulfilled' ? adResult.value : [];
 
+    // Track DataForSeo API cost (1 unit = 1 competitor_domain call)
+    if (seoDomains.length > 0) {
+      const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
+      const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+      const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
+      logTokenUsage(supabase as any, {
+        userId, orgId, app: 'competitor-campaign-review:dataforseo', source: detectSource(userId),
+        aiProvider: 'dataforseo', aiModel: 'competitors-domain',
+        inputTokens: 0, outputTokens: 1, totalTokens: 1,
+      }).catch(() => {});
+    }
+
     // Merge: ad competitors first (they have data), then SEO
     const seen = new Set<string>([brandDomain.toLowerCase()]);
     const candidateDomains: string[] = [];

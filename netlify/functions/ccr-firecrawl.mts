@@ -72,6 +72,18 @@ export default async (req: Request) => {
 
     console.log(`[firecrawl] ${landingPages.length}/${targets.length} pages crawled successfully`);
 
+    // Track Firecrawl API cost (1 unit = 1 page scrape)
+    if (landingPages.length > 0) {
+      const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
+      const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+      const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
+      logTokenUsage(supabase as any, {
+        userId, orgId, app: 'competitor-campaign-review:firecrawl', source: detectSource(userId),
+        aiProvider: 'firecrawl', aiModel: 'scrape-v1',
+        inputTokens: 0, outputTokens: landingPages.length, totalTokens: landingPages.length,
+      }).catch(() => {});
+    }
+
     // Write to report_data — landing page shields transform to content
     await mergeReportData(supabase, jobId, {
       landingPages,
