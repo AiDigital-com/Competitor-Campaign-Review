@@ -20,6 +20,10 @@ export default async (req: Request) => {
     // LLM verification with summary + campaign name context
     const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'fast', { supabase });
 
+    // Include brand in context so LLM classifies its product line too
+    const brandCampaigns = (candidateCampaigns?.[brandDomain.toLowerCase()] || []).slice(0, 3);
+    const brandCampStr = brandCampaigns.length > 0 ? ` | Top campaigns: ${brandCampaigns.map((c: string) => `"${c}"`).join(', ')}` : '';
+
     const summaryContext = candidateDomains.map((d: string) => {
       const s = summaries[d];
       const campaigns = (candidateCampaigns?.[d] || []).slice(0, 3);
@@ -41,7 +45,7 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
   - Example: if brand runs "retirement planning" campaigns, keep competitors with retirement/401k/annuity campaigns
   - Remove competitors in the same industry but different product line (e.g. car insurance vs retirement)
 - Do NOT remove domains just because they share a parent company — they may have distinct product lines`,
-        userParts: [{ text: `Brand: ${brandDomain}\nCandidate competitors with spend data and campaign names:\n${summaryContext}` }],
+        userParts: [{ text: `Brand: ${brandDomain}${brandCampStr}\n\nCandidate competitors with spend data and campaign names:\n${summaryContext}\n\nIMPORTANT: Include the brand (${brandDomain}) as the FIRST element in your response with keep=true. Classify its productLine from its campaign names.` }],
         app: `${APP_NAME}:verify`,
         userId,
         jsonMode: true,

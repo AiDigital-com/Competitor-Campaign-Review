@@ -5,7 +5,7 @@
  */
 import type { Config } from '@netlify/functions';
 import { getCompetitorDomains } from './_shared/dataforseo.js';
-import { discoverAdCompetitors, getAdClarityData } from './_shared/bigquery.js';
+import { discoverAdCompetitors, getAdClarityData, getCampaignDetail } from './_shared/bigquery.js';
 import { getSupabase, mergeReportData, setStep, insertTasks, markError } from './_shared/pipeline.js';
 import { log } from './_shared/logger.js';
 
@@ -60,6 +60,13 @@ export default async (req: Request) => {
     }
 
     console.log(`[discover] ${adCandidates.length} ad + ${seoDomains.length} SEO → ${candidateDomains.length} candidates`);
+
+    // Fetch brand's top campaigns (for product-line classification in verify step)
+    const brandCamps = await getCampaignDetail([brandDomain.toLowerCase()], 5);
+    candidateCampaigns[brandDomain.toLowerCase()] = brandCamps
+      .map(c => (c.creative_campaign_name || '').replace(/\s+\d{7,}$/, ''))
+      .filter((v: string, i: number, a: string[]) => v && a.indexOf(v) === i)
+      .slice(0, 5);
 
     // Fetch summary-level AdClarity data for brand + all candidates
     await setStep(supabase, jobId, 'Fetching ad summaries…');
