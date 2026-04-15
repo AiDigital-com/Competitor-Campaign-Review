@@ -101,8 +101,12 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
       meta: { verified: keptDomains.length, filtered: candidateDomains.length - keptDomains.length },
     });
 
+    // Brand's product line for campaign-level filtering in Lambda 3a
+    const brandAnnotation = annotations[brandDomain.toLowerCase()];
+    const brandProductLine = brandAnnotation?.productLine || '';
+
     // GATE: insert 3 parallel tasks
-    const sharedPayload = { jobId, brandDomain, userId, verifiedDomains: keptDomains, annotations };
+    const sharedPayload = { jobId, brandDomain, brandProductLine, userId, verifiedDomains: keptDomains, annotations };
 
     await insertTasks(supabase, jobId, [
       { taskType: 'ccr_campaign_detail', payload: { ...sharedPayload, topCampaigns } },
