@@ -190,6 +190,13 @@ export function CcrReport({ data }: Props) {
                               color: 'var(--text-muted)', border: '1px solid var(--border)',
                             }}>${fmtMoney(campSpend)}</span>
                           )}
+                          {campImps > 0 && campSpend > 0 && (
+                            <span style={{
+                              fontSize: '0.65rem', padding: '0.125rem 0.5rem',
+                              borderRadius: '999px', background: 'var(--surface2)',
+                              color: 'var(--text-muted)', border: '1px solid var(--border)',
+                            }}>CPM ${((campSpend / campImps) * 1000).toFixed(2)}</span>
+                          )}
                           {campCreatives[0]?.firstSeen && (
                             <span style={{
                               fontSize: '0.65rem', padding: '0.125rem 0.5rem',
