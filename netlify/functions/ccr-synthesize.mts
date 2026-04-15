@@ -14,7 +14,7 @@ import { log } from './_shared/logger.js';
 import type { CcrInsights, CampaignData } from '../../src/lib/types.js';
 
 export default async (req: Request) => {
-  const { sessionId, jobId, brandDomain, userId } = await req.json();
+  const { jobId, brandDomain, userId } = await req.json();
   const supabase = getSupabase();
 
   try {
@@ -24,7 +24,7 @@ export default async (req: Request) => {
     const { data: session } = await supabase
       .from(SESSION_TABLE)
       .select('report_data')
-      .eq('id', sessionId)
+      .eq('id', jobId)
       .single();
 
     const rd = (session?.report_data || {}) as Record<string, any>;
@@ -71,7 +71,7 @@ Rules:
     const narrative = insights?.executiveSummary || result.text;
 
     // Write final insights to report_data
-    await mergeReportData(supabase, sessionId, {
+    await mergeReportData(supabase, jobId, {
       phase: 'complete',
       narrative,
       insights,
@@ -80,7 +80,7 @@ Rules:
     log.info('ccr-synthesize.complete', {
       function_name: 'ccr-synthesize',
       user_id: userId,
-      entity_id: sessionId,
+      entity_id: jobId,
       ai_provider: llm.provider,
       ai_model: llm.model,
       ai_input_tokens: result.usage?.inputTokens,
@@ -88,11 +88,11 @@ Rules:
     });
 
     // Mark pipeline complete
-    await markComplete(supabase, sessionId, jobId);
+    await markComplete(supabase, jobId, jobId);
 
   } catch (err) {
     console.error('[synthesize] Error:', err);
-    await markError(supabase, sessionId, jobId, err as Error);
+    await markError(supabase, jobId, jobId, err as Error);
   }
 };
 

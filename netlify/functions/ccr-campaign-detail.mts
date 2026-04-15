@@ -13,7 +13,7 @@ import {
 
 
 export default async (req: Request) => {
-  const { sessionId, jobId, brandDomain, userId, verifiedDomains, annotations, topCampaigns } = await req.json();
+  const { jobId, brandDomain, userId, verifiedDomains, annotations, topCampaigns } = await req.json();
   const supabase = getSupabase();
 
   try {
@@ -45,7 +45,7 @@ export default async (req: Request) => {
     if (brandAnn) { brand.parentCompany = brandAnn.parentCompany; brand.productLine = brandAnn.productLine; }
 
     // Write deterministic report — comparison table + campaign grid can render
-    await mergeReportData(supabase, sessionId, {
+    await mergeReportData(supabase, jobId, {
       phase: 'campaigns',
       brand,
       competitors,
@@ -56,16 +56,16 @@ export default async (req: Request) => {
     console.log(`[campaign-detail] Brand: ${brand.domain} (${brand.totalImpressions} imps), ${competitors.length} competitors`);
 
     // Check if all Phase 3 data is present → trigger synthesize
-    if (await isPhase3DataComplete(supabase, sessionId)) {
-      await insertTasks(supabase, sessionId, [{
+    if (await isPhase3DataComplete(supabase, jobId)) {
+      await insertTasks(supabase, jobId, [{
         taskType: 'ccr_synthesize',
-        payload: { sessionId, jobId, brandDomain, userId },
+        payload: { jobId, brandDomain, userId },
       }]);
     }
 
   } catch (err) {
     console.error('[campaign-detail] Error:', err);
-    await markError(supabase, sessionId, jobId, err as Error);
+    await markError(supabase, jobId, jobId, err as Error);
   }
 };
 

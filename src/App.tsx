@@ -178,42 +178,19 @@ function AppContent({
     sessionId: string,
   ) => {
     const intake = data as CcrIntake
-    const newJobId = crypto.randomUUID()
-    setJobId(newJobId)
+    // sessionId = jobId (standard N-Lambda pattern — single ID for session + job + pipeline)
+    setJobId(sessionId)
     setDispatched(true)
     setActiveSessionId(sessionId)
 
-    // Upsert session record with brand name + job id
-    // Uses upsert because useSessionPersistence may not have created the row yet
-    if (supabase) {
-      await supabase.from(SESSION_TABLE).upsert({
-        id: sessionId,
-        user_id: userId,
-        brand_name: intake.brand_domain,
-        status: 'processing',
-        job_id: newJobId,
-        intake_summary: intake,
-        deleted_by_user: false,
-      }, { onConflict: 'id' })
-    }
-
-    // Insert first pipeline task (N-Lambda architecture)
-    // job_status created by ccr-discover Lambda (service role — frontend RLS blocks writes)
-    if (supabase) {
-      await supabase.from('pipeline_tasks').insert({
-        scan_id: sessionId,
-        app: APP_NAME,
-        task_type: 'ccr_discover',
-        status: 'pending',
-        payload: { sessionId, jobId: newJobId, brandDomain: intake.brand_domain, userId },
-        attempts: 0,
-        max_attempts: 2,
-      })
-    }
-
-    // Kick task-worker to pick up immediately
-    authFetch('/.netlify/functions/task-worker', { method: 'POST' })
-      .catch(() => {})
+    // Dispatch via server-side function (handles session, job_status, pipeline_tasks — all service role)
+    authFetch('/.netlify/functions/dispatch-pipeline', {
+      method: 'POST',
+      body: JSON.stringify({
+        jobId: sessionId,
+        intakeSummary: { brand_domain: intake.brand_domain, source: intake.source, brand_name: intake.brand_domain },
+      }),
+    }).catch(err => console.error('Dispatch error:', err))
 
     setRefreshKey(k => k + 1)
   }, [supabase, userId, authFetch, setActiveSessionId, setRefreshKey])

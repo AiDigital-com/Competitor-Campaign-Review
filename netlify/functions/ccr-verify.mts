@@ -11,7 +11,7 @@ import { getSupabase, mergeReportData, setStep, insertTasks, markError, APP_NAME
 import { log } from './_shared/logger.js';
 
 export default async (req: Request) => {
-  const { sessionId, jobId, brandDomain, userId, candidateDomains, summaries } = await req.json();
+  const { jobId, brandDomain, userId, candidateDomains, summaries } = await req.json();
   const supabase = getSupabase();
 
   try {
@@ -78,7 +78,7 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
     }
 
     // Write verified state to report_data — comparison table can render now
-    await mergeReportData(supabase, sessionId, {
+    await mergeReportData(supabase, jobId, {
       phase: 'verified',
       verifiedDomains: keptDomains,
       annotations,
@@ -88,14 +88,14 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
     log.info('ccr-verify.complete', {
       function_name: 'ccr-verify',
       user_id: userId,
-      entity_id: sessionId,
+      entity_id: jobId,
       meta: { verified: keptDomains.length, filtered: candidateDomains.length - keptDomains.length },
     });
 
     // GATE: insert 3 parallel tasks
-    const sharedPayload = { sessionId, jobId, brandDomain, userId, verifiedDomains: keptDomains, annotations };
+    const sharedPayload = { jobId, brandDomain, userId, verifiedDomains: keptDomains, annotations };
 
-    await insertTasks(supabase, sessionId, [
+    await insertTasks(supabase, jobId, [
       { taskType: 'ccr_campaign_detail', payload: { ...sharedPayload, topCampaigns } },
       { taskType: 'ccr_firecrawl', payload: { ...sharedPayload, topCampaigns } },
       { taskType: 'ccr_publishers', payload: sharedPayload },
@@ -103,7 +103,7 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
 
   } catch (err) {
     console.error('[verify] Error:', err);
-    await markError(supabase, sessionId, jobId, err as Error);
+    await markError(supabase, jobId, jobId, err as Error);
   }
 };
 

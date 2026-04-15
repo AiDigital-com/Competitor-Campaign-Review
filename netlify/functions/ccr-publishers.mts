@@ -13,7 +13,7 @@ import {
 
 
 export default async (req: Request) => {
-  const { sessionId, jobId, brandDomain, userId, verifiedDomains } = await req.json();
+  const { jobId, brandDomain, userId, verifiedDomains } = await req.json();
   const supabase = getSupabase();
 
   try {
@@ -50,21 +50,21 @@ export default async (req: Request) => {
     console.log(`[publishers] ${Object.keys(publishersByDomain).length} domains with publisher data`);
 
     // Write to report_data
-    await mergeReportData(supabase, sessionId, {
+    await mergeReportData(supabase, jobId, {
       publishersByDomain,
     });
 
     // Check if all Phase 3 data is present → trigger synthesize
-    if (await isPhase3DataComplete(supabase, sessionId)) {
-      await insertTasks(supabase, sessionId, [{
+    if (await isPhase3DataComplete(supabase, jobId)) {
+      await insertTasks(supabase, jobId, [{
         taskType: 'ccr_synthesize',
-        payload: { sessionId, jobId, brandDomain, userId },
+        payload: { jobId, brandDomain, userId },
       }]);
     }
 
   } catch (err) {
     console.error('[publishers] Error:', err);
-    await markError(supabase, sessionId, jobId, err as Error);
+    await markError(supabase, jobId, jobId, err as Error);
   }
 };
 

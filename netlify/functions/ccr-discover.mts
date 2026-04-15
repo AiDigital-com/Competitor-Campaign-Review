@@ -10,28 +10,15 @@ import { getSupabase, mergeReportData, setStep, insertTasks, markError } from '.
 import { log } from './_shared/logger.js';
 
 export default async (req: Request) => {
-  const { sessionId, jobId, brandDomain, userId } = await req.json();
+  // Standard N-Lambda payload: jobId = sessionId (single ID)
+  const body = await req.json();
+  const jobId = body.jobId;
+  const userId = body.userId;
+  const brandDomain = body.intakeSummary?.brand_domain || body.brandDomain;
   const supabase = getSupabase();
 
   try {
-    // Create job_status row (service role — frontend RLS blocks writes)
-    await supabase.from('job_status').upsert({
-      id: jobId,
-      app: 'competitor-campaign-review',
-      status: 'streaming',
-      meta: { current_step: 'Discovering competitors…' },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-
-    // Ensure session row exists
-    await supabase.from('ccr_sessions').upsert({
-      id: sessionId,
-      user_id: userId,
-      brand_name: brandDomain,
-      status: 'processing',
-      job_id: jobId,
-      deleted_by_user: false,
-    }, { onConflict: 'id' });
+    // Session + job_status already created by dispatch-pipeline (createDispatchHandler)
 
     // Two parallel signals: SEO competitors + ad-spend competitors
     const [seoResult, adResult] = await Promise.allSettled([
@@ -68,7 +55,7 @@ export default async (req: Request) => {
       };
     }
 
-    await mergeReportData(supabase, sessionId, {
+    await mergeReportData(supabase, jobId, {
       phase: 'discover',
       brandDomain: brandDomain.toLowerCase(),
       candidateDomains,
@@ -78,19 +65,19 @@ export default async (req: Request) => {
     log.info('ccr-discover.complete', {
       function_name: 'ccr-discover',
       user_id: userId,
-      entity_id: sessionId,
+      entity_id: jobId,
       meta: { candidateCount: candidateDomains.length, withData: summaryData.length },
     });
 
     // Insert next task: VERIFY (gate)
-    await insertTasks(supabase, sessionId, [{
+    await insertTasks(supabase, jobId, [{
       taskType: 'ccr_verify',
-      payload: { sessionId, jobId, brandDomain, userId, candidateDomains, summaries: summaryMap },
+      payload: { jobId, brandDomain, userId, candidateDomains, summaries: summaryMap },
     }]);
 
   } catch (err) {
     console.error('[discover] Error:', err);
-    await markError(supabase, sessionId, jobId, err as Error);
+    await markError(supabase, jobId, jobId, err as Error);
   }
 };
 
