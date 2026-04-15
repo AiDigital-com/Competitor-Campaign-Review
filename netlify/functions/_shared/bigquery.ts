@@ -1,20 +1,20 @@
 /**
  * BigQuery / AdClarity helper.
  *
- * Three modes (cascading fallback):
+ * Two modes (cascading fallback):
  * 1. Query mode (requires bigquery.jobUser) — runs SQL against the raw table.
  * 2. Supabase training mode — reads cached AdClarity data from ccr_training_data.
- * 3. BQ scan mode (Data Viewer only) — scans pre-aggregated summary tables.
+ *    Training data mirrors the exact BQ pre-aggregated table schemas:
+ *    adv_summary, adv_campaign_channel_summary, adv_creative,
+ *    adv_publisher_channel_method, adv_expenditure_trend_month.
  *
- * Tries query → Supabase training → BQ scan.
+ * Tries query → Supabase training.
  */
 import { BigQuery } from '@google-cloud/bigquery';
 import { createClient as createSupabase } from '@supabase/supabase-js';
 import type { CampaignData } from '../../../src/lib/types.js';
 
 function createBqClient(): BigQuery {
-  // Credentials split across env vars to stay under Lambda 4KB limit.
-  // GCP_PRIVATE_KEY holds the PEM key, GCP_CLIENT_EMAIL the service account.
   const credentials = process.env.GOOGLE_CREDENTIALS
     ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
     : {
@@ -34,14 +34,19 @@ function tableRef(): string {
   return `\`${project}.${dataset}.${table}\``;
 }
 
+function getSupabase() {
+  return createSupabase(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
 /**
  * Fetch AdClarity campaign data for a set of domains.
- * Cascade: SQL query → Supabase training data → BQ table scan.
+ * Cascade: SQL query → Supabase training data.
  */
 export async function getAdClarityData(domains: string[]): Promise<CampaignData[]> {
   const hasGcp = !!(process.env.GCP_PROJECT_ID && (process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_CREDENTIALS));
 
-  // 1. Try SQL query (fastest, needs bigquery.jobUser + GCP creds)
   if (hasGcp) {
     try {
       const result = await queryMode(domains);
@@ -51,24 +56,44 @@ export async function getAdClarityData(domains: string[]): Promise<CampaignData[
     }
   }
 
-  // 2. Try Supabase training data (fast, pre-cached)
   try {
     const result = await supabaseTrainingMode(domains);
     if (result.length > 0) {
-      console.log(`[AdClarity] Supabase training data: ${result.length} domains`);
+      console.log(`[AdClarity] Training data: ${result.length} domains`);
       return result;
     }
   } catch (err) {
-    console.log('[AdClarity] Supabase training mode failed:', (err as Error).message);
+    console.log('[AdClarity] Training mode failed:', (err as Error).message);
   }
 
-  // 3. Fall back to BQ table scan (slowest, needs GCP creds)
-  if (hasGcp) {
-    console.log('[AdClarity] Falling back to BQ table scan');
-    return trainingMode(domains);
-  }
+  console.log('[AdClarity] No data available — returning empty');
+  return [];
+}
 
-  console.log('[AdClarity] No GCP creds and no training data — returning empty');
+/**
+ * Discover top ad competitors from training data.
+ * Returns domain names sorted by impressions (descending), excluding the brand.
+ */
+export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<string[]> {
+  const brand = brandDomain.toLowerCase();
+  try {
+    const sb = getSupabase();
+    const { data: rows } = await sb
+      .from('ccr_training_data')
+      .select('advertiser_domain, data')
+      .eq('data_type', 'adv_summary')
+      .neq('advertiser_domain', brand);
+
+    if (rows && rows.length > 0) {
+      return rows
+        .map(r => ({ domain: r.advertiser_domain, impressions: Number(r.data?.impressions) || 0 }))
+        .sort((a, b) => b.impressions - a.impressions)
+        .slice(0, limit)
+        .map(r => r.domain);
+    }
+  } catch (err) {
+    console.log('[discoverAdCompetitors] failed:', (err as Error).message);
+  }
   return [];
 }
 
@@ -88,20 +113,21 @@ async function queryMode(domains: string[]): Promise<CampaignData[]> {
         creative_url_supplier    AS creative_url,
         creative_mime_type       AS creative_mime_type,
         creative_first_seen_date AS creative_first_seen,
+        creative_campaign_name   AS campaign_name,
         MAX(impressions)         AS impressions,
         MAX(spend)               AS spend
       FROM ${tableRef()}
       WHERE LOWER(advertiser_domain) IN UNNEST(@domains)
         AND month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
-      GROUP BY 1, 2, 3, 4, 5, 6, 7
+      GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
     )
     SELECT
-      domain, channel, publisher,
+      domain, channel, publisher, campaign_name,
       creative_id, creative_url, creative_mime_type, creative_first_seen,
       SUM(impressions) AS impressions,
       SUM(spend)       AS spend
     FROM deduped
-    GROUP BY 1, 2, 3, 4, 5, 6, 7
+    GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
     ORDER BY impressions DESC
   `;
 
@@ -111,16 +137,13 @@ async function queryMode(domains: string[]): Promise<CampaignData[]> {
     types: { domains: ['STRING'] },
   });
 
-  return buildCampaignData(rows);
+  return buildCampaignDataFromRaw(rows);
 }
 
-// ── Supabase training mode (cached AdClarity data) ──────────────────────────
+// ── Supabase training mode (mirrors BQ pre-aggregated tables) ───────────────
 
 async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> {
-  const sb = createSupabase(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const sb = getSupabase();
   const lowerDomains = domains.map(d => d.toLowerCase());
 
   const { data: rows, error } = await sb
@@ -128,35 +151,47 @@ async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> 
     .select('advertiser_domain, data_type, data')
     .in('advertiser_domain', lowerDomains);
 
-  if (error) throw new Error(`Supabase training query failed: ${error.message}`);
+  if (error) throw new Error(`Training query failed: ${error.message}`);
   if (!rows || rows.length === 0) return [];
 
-  // Group by domain
+  // Group by domain → data_type
   const byDomain = new Map<string, Record<string, any>>();
   for (const row of rows) {
     if (!byDomain.has(row.advertiser_domain)) byDomain.set(row.advertiser_domain, {});
     byDomain.get(row.advertiser_domain)![row.data_type] = row.data;
   }
 
-  return Array.from(byDomain.entries()).map(([domain, types]) => {
-    const s = types.summary || {};
+  return Array.from(byDomain.entries()).map(([domain, tables]) => {
+    // adv_summary → top-level metrics + channel breakdown
+    const s = tables.adv_summary || {};
     const imp = Number(s.impressions) || 0;
     const spend = Number(s.spend) || 0;
     const total = imp || 1;
 
-    const channels: { name: string; impressions: number; spend: number }[] = [];
-    const displayImp = Number(s.display_impressions) || 0;
-    const videoImp = Number(s.video_impressions) || 0;
-    const socialImp = Number(s.social_impressions) || 0;
-    const ctvImp = Number(s.ctv_impressions) || 0;
-    if (displayImp) channels.push({ name: 'Display', impressions: displayImp, spend: Math.round(spend * displayImp / total) });
-    if (videoImp) channels.push({ name: 'Video', impressions: videoImp, spend: Math.round(spend * videoImp / total) });
-    if (socialImp) channels.push({ name: 'Social', impressions: socialImp, spend: Math.round(spend * socialImp / total) });
-    if (ctvImp) channels.push({ name: 'CTV', impressions: ctvImp, spend: Math.round(spend * ctvImp / total) });
+    const channels: CampaignData['channels'] = [];
+    const chMap: Record<string, number> = {
+      Display: Number(s.display_impressions) || 0,
+      Video: Number(s.video_impressions) || 0,
+      Social: Number(s.social_impressions) || 0,
+      CTV: Number(s.ctv_impressions) || 0,
+    };
+    for (const [name, chImp] of Object.entries(chMap)) {
+      if (chImp > 0) channels.push({ name, impressions: chImp, spend: Math.round(spend * chImp / total) });
+    }
     channels.sort((a, b) => b.impressions - a.impressions);
 
-    const pubs = Array.isArray(types.publishers) ? types.publishers : [];
-    const crvs = Array.isArray(types.creatives) ? types.creatives : [];
+    // adv_publisher_channel_method → publishers
+    const pubs: any[] = Array.isArray(tables.adv_publisher_channel_method) ? tables.adv_publisher_channel_method : [];
+
+    // adv_creative → creatives (with campaign names + per-creative metrics)
+    const crvs: any[] = Array.isArray(tables.adv_creative) ? tables.adv_creative : [];
+
+    // adv_campaign_channel_summary → campaign metadata (channels, dates, rank)
+    const campRows: any[] = Array.isArray(tables.adv_campaign_channel_summary) ? tables.adv_campaign_channel_summary : [];
+    const campLookup = new Map<string, any>();
+    for (const c of campRows) {
+      campLookup.set(c.creative_campaign_name, c);
+    }
 
     return {
       domain,
@@ -164,159 +199,37 @@ async function supabaseTrainingMode(domains: string[]): Promise<CampaignData[]> 
       totalSpend: spend,
       channels,
       publishers: pubs
-        .map((r: any) => ({ domain: r.publisher_group || r.domain || 'Unknown', impressions: Number(r.impressions) || 0, spend: Number(r.spend) || 0 }))
-        .sort((a: any, b: any) => b.impressions - a.impressions)
-        .slice(0, 10),
-      creatives: crvs
-        .map((r: any) => ({
-          id: String(r.creative_id || ''),
-          url: r.creative_url_supplier || r.url || '',
-          mimeType: r.creative_mime_type || '',
-          channelName: '',
-          firstSeen: r.creative_first_seen || '',
-          impressions: Number(r.impressions) || 0,
-          spend: Number(r.spend) || 0,
-          campaignName: r.all_campaigns || '',
-        }))
-        .slice(0, 20),
-    };
-  }).filter(d => d.totalImpressions > 0);
-}
-
-/**
- * Discover top ad competitors from AdClarity data.
- * Returns domain names sorted by impressions (descending), excluding the brand.
- * Uses Supabase training data when BQ queries aren't available.
- */
-export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<string[]> {
-  const brand = brandDomain.toLowerCase();
-
-  // Try Supabase training data first (fast)
-  try {
-    const sb = createSupabase(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-    const { data: rows } = await sb
-      .from('ccr_training_data')
-      .select('advertiser_domain, data')
-      .eq('data_type', 'summary')
-      .neq('advertiser_domain', brand);
-
-    if (rows && rows.length > 0) {
-      return rows
-        .map(r => ({ domain: r.advertiser_domain, impressions: Number(r.data?.impressions) || 0 }))
-        .sort((a, b) => b.impressions - a.impressions)
-        .slice(0, limit)
-        .map(r => r.domain);
-    }
-  } catch (err) {
-    console.log('[discoverAdCompetitors] Supabase failed:', (err as Error).message);
-  }
-
-  return [];
-}
-
-// ── BQ scan mode (getRows scan — Data Viewer only, slowest) ─────────────────
-
-async function trainingMode(domains: string[]): Promise<CampaignData[]> {
-  const bq = createBqClient();
-  const ds = bq.dataset(process.env.ADCLARITY_DATASET || 'adclarity_competitor_analysis');
-  const domainSet = new Set(domains.map(d => d.toLowerCase()));
-
-  // Scan summary + publisher + creative tables in parallel
-  const [summaryHits, publisherHits, creativeHits] = await Promise.all([
-    scanTable(ds, 'adv_summary', domainSet, 1),
-    scanTable(ds, 'adv_publisher_channel_method', domainSet, 15),
-    scanTable(ds, 'adv_creative', domainSet, 10),
-  ]);
-
-  return Array.from(domainSet).map(domain => {
-    const summary = summaryHits.get(domain)?.[0];
-    const publishers = publisherHits.get(domain) || [];
-    const creatives = creativeHits.get(domain) || [];
-
-    const imp = Number(summary?.impressions) || 0;
-    const spend = Number(summary?.spend) || 0;
-
-    // Build channel breakdown from summary columns
-    const channels: { name: string; impressions: number; spend: number }[] = [];
-    if (summary) {
-      const total = imp || 1;
-      const displayImp = Number(summary.display_impressions) || 0;
-      const videoImp = Number(summary.video_impressions) || 0;
-      const socialImp = Number(summary.social_impressions) || 0;
-      const ctvImp = Number(summary.ctv_impressions) || 0;
-      if (displayImp) channels.push({ name: 'Display', impressions: displayImp, spend: Math.round(spend * displayImp / total) });
-      if (videoImp) channels.push({ name: 'Video', impressions: videoImp, spend: Math.round(spend * videoImp / total) });
-      if (socialImp) channels.push({ name: 'Social', impressions: socialImp, spend: Math.round(spend * socialImp / total) });
-      if (ctvImp) channels.push({ name: 'CTV', impressions: ctvImp, spend: Math.round(spend * ctvImp / total) });
-    }
-    channels.sort((a, b) => b.impressions - a.impressions);
-
-    return {
-      domain,
-      totalImpressions: imp,
-      totalSpend: spend,
-      channels,
-      publishers: publishers
-        .map((r: any) => ({
+        .map(r => ({
           domain: r.publisher_group || 'Unknown',
           impressions: Number(r.impressions) || 0,
           spend: Number(r.spend) || 0,
         }))
-        .sort((a: any, b: any) => b.impressions - a.impressions)
+        .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 10),
-      creatives: creatives
-        .map((r: any) => ({
-          id: String(r.creative_id || r.creative_rank || ''),
-          url: r.creative_url_supplier || '',
-          mimeType: '',
-          channelName: '',
-          firstSeen: r.creative_first_seen ? String(r.creative_first_seen) : '',
-        }))
+      creatives: crvs
+        .map(r => {
+          const campName = r.all_campaigns || '';
+          const campMeta = campLookup.get(campName);
+          return {
+            id: String(r.creative_id || ''),
+            url: r.creative_url_supplier || '',
+            mimeType: '',
+            channelName: campMeta?.aggregated_channels || '',
+            firstSeen: r.creative_first_seen || '',
+            impressions: Number(r.impressions) || 0,
+            spend: Number(r.spend) || 0,
+            campaignName: campName,
+          };
+        })
+        .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 20),
     };
   }).filter(d => d.totalImpressions > 0);
 }
 
-/** Paginate through a table, collecting rows matching target domains. */
-async function scanTable(
-  ds: any, tableName: string, targets: Set<string>, maxPerDomain: number,
-): Promise<Map<string, any[]>> {
-  const table = ds.table(tableName);
-  const found = new Map<string, any[]>();
-  let token: string | undefined;
-  let allFound = false;
+// ── Shared: build CampaignData from raw BQ query rows ───────────────────────
 
-  while (!allFound) {
-    const opts: any = { maxResults: 10000, autoPaginate: false };
-    if (token) opts.pageToken = token;
-    const [rows, nextQuery] = await table.getRows(opts);
-
-    for (const r of rows) {
-      const d = (r.advertiser_domain || '').toLowerCase();
-      if (!targets.has(d)) continue;
-      if (!found.has(d)) found.set(d, []);
-      const arr = found.get(d)!;
-      if (arr.length < maxPerDomain) arr.push(r);
-    }
-
-    token = nextQuery?.pageToken;
-    if (!token) break;
-
-    // Early exit if we found enough data for all domains
-    if (found.size >= targets.size) {
-      allFound = [...targets].every(d => (found.get(d)?.length || 0) >= maxPerDomain);
-    }
-  }
-
-  return found;
-}
-
-// ── Shared: build CampaignData from query rows ──────────────────────────────
-
-function buildCampaignData(rows: any[]): CampaignData[] {
+function buildCampaignDataFromRaw(rows: any[]): CampaignData[] {
   const byDomain = new Map<string, any[]>();
   for (const row of rows) {
     const key = (row.domain as string) ?? '';
@@ -327,7 +240,7 @@ function buildCampaignData(rows: any[]): CampaignData[] {
   return Array.from(byDomain.entries()).map(([domain, domainRows]) => {
     const channelMap = new Map<string, { impressions: number; spend: number }>();
     const publisherMap = new Map<string, { impressions: number; spend: number }>();
-    const creativeMap = new Map<string, { url: string; mimeType: string; channelName: string; firstSeen: string }>();
+    const creativeMap = new Map<string, { url: string; mimeType: string; channelName: string; firstSeen: string; impressions: number; spend: number; campaignName: string }>();
 
     let totalImpressions = 0;
     let totalSpend = 0;
@@ -350,6 +263,9 @@ function buildCampaignData(rows: any[]): CampaignData[] {
           mimeType: (row.creative_mime_type as string) || '',
           channelName: ch,
           firstSeen: (row.creative_first_seen as string) || '',
+          impressions: imp,
+          spend: spd,
+          campaignName: (row.campaign_name as string) || '',
         });
       }
 
@@ -369,7 +285,8 @@ function buildCampaignData(rows: any[]): CampaignData[] {
         .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 10),
       creatives: Array.from(creativeMap.entries())
-        .map(([id, d]) => ({ id, url: d.url, mimeType: d.mimeType, channelName: d.channelName, firstSeen: d.firstSeen }))
+        .map(([id, d]) => ({ id, ...d }))
+        .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 20),
     };
   });
