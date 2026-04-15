@@ -19,19 +19,19 @@ function getSupabase() {
 }
 
 function useBQ(): boolean {
-  return !!(process.env.GCP_PROJECT_ID && (process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_CREDENTIALS));
+  return !!(process.env.GCP_PID && (process.env.GCP_PK || process.env.GOOGLE_CREDENTIALS));
 }
 
 async function getBQ() {
   const { BigQuery } = await import('@google-cloud/bigquery');
   const credentials = process.env.GOOGLE_CREDENTIALS
     ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
-    : { client_email: process.env.GCP_CLIENT_EMAIL!, private_key: process.env.GCP_PRIVATE_KEY!.replace(/\\n/g, '\n') };
-  return new BigQuery({ projectId: process.env.GCP_PROJECT_ID!, credentials });
+    : { client_email: process.env.GCP_SA!, private_key: process.env.GCP_PK!.replace(/\\n/g, '\n') };
+  return new BigQuery({ projectId: process.env.GCP_PID!, credentials });
 }
 
 function rawTable(): string {
-  const p = process.env.GCP_PROJECT_ID!;
+  const p = process.env.GCP_PID!;
   const ds = process.env.ADCLARITY_DATASET || 'adclarity_competitor_analysis';
   const t = process.env.ADCLARITY_TABLE_NAME || 'adclarity_aws_monthly_test_2026';
   return `\`${p}.${ds}.${t}\``;
