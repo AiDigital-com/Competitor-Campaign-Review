@@ -197,16 +197,31 @@ function AppContent({
       }, { onConflict: 'id' })
     }
 
-    // Fire pipeline (background function — fire & forget)
-    authFetch('/.netlify/functions/ccr-pipeline-background', {
-      method: 'POST',
-      body: JSON.stringify({
-        sessionId,
-        jobId: newJobId,
-        intakeData: intake,
-        userId,
-      }),
-    }).catch(err => console.error('Pipeline launch error:', err))
+    // Insert first pipeline task (N-Lambda architecture)
+    // Also create job_status row so frontend can track progress via Realtime
+    if (supabase) {
+      await supabase.from('job_status').upsert({
+        id: newJobId,
+        app: APP_NAME,
+        status: 'streaming',
+        meta: { current_step: 'Discovering competitors…' },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
+
+      await supabase.from('pipeline_tasks').insert({
+        scan_id: sessionId,
+        app: APP_NAME,
+        task_type: 'ccr_discover',
+        status: 'pending',
+        payload: { sessionId, jobId: newJobId, brandDomain: intake.brand_domain, userId },
+        attempts: 0,
+        max_attempts: 2,
+      })
+    }
+
+    // Kick task-worker to pick up immediately
+    authFetch('/.netlify/functions/task-worker', { method: 'POST' })
+      .catch(() => {})
 
     setRefreshKey(k => k + 1)
   }, [supabase, userId, authFetch, setActiveSessionId, setRefreshKey])

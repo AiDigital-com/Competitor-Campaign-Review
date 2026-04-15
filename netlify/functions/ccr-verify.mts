@@ -1,0 +1,118 @@
+/**
+ * Lambda 2: VERIFY (GATE)
+ * LLM classifies each competitor as Brand + Product, filters irrelevant.
+ * Selects top 3 campaigns per brand from adv_campaign_channel_summary.
+ * Output: verified domains + selected campaigns → inserts 3 parallel tasks.
+ */
+import type { Config } from '@netlify/functions';
+import { createLLMProvider } from '@AiDigital-com/design-system/server';
+import { createClient as createSupabase } from '@supabase/supabase-js';
+import { getSupabase, mergeReportData, setStep, insertTasks, markError, APP_NAME } from './_shared/pipeline.js';
+import { log } from './_shared/logger.js';
+
+export default async (req: Request) => {
+  const { sessionId, jobId, brandDomain, userId, candidateDomains, summaries } = await req.json();
+  const supabase = getSupabase();
+
+  try {
+    await setStep(supabase, jobId, 'Verifying competitors…');
+
+    // LLM verification with summary context
+    const llm = createLLMProvider('gemini', process.env.GEMINI_API_KEY!, 'fast', { supabase });
+
+    const summaryContext = candidateDomains.map((d: string) => {
+      const s = summaries[d];
+      return s
+        ? `- ${d}: ${fmtM(s.totalImpressions)} imps, $${fmtM(s.totalSpend)} spend, channels: ${(s.channels || []).map((c: any) => c.name).join(', ')}`
+        : `- ${d}: no ad data`;
+    }).join('\n');
+
+    let verified: { domain: string; parentCompany: string; productLine: string; keep: boolean }[] = [];
+    try {
+      const result = await llm.generateContent({
+        system: `You classify advertising domains for competitive analysis. Return ONLY valid JSON array — no markdown.
+Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":true/false}
+- parentCompany: owning corporation (e.g. "PepsiCo")
+- productLine: specific product focus (e.g. "Core Pepsi beverages" vs "Muscle Milk / corporate")
+- keep: false ONLY if clearly not a competitor (social platforms, search engines, unrelated industry)
+- Do NOT remove domains just because they share a parent company`,
+        userParts: [{ text: `Brand: ${brandDomain}\nCandidate competitors with spend data:\n${summaryContext}` }],
+        app: `${APP_NAME}:verify`,
+        userId,
+        jsonMode: true,
+      });
+      try {
+        verified = JSON.parse(result.text);
+      } catch {
+        const match = result.text.match(/\[[\s\S]*\]/);
+        if (match) verified = JSON.parse(match[0]);
+      }
+    } catch (err) {
+      console.warn('[verify] LLM failed, using unverified list:', err);
+      verified = candidateDomains.map((d: string) => ({ domain: d, parentCompany: '', productLine: '', keep: true }));
+    }
+
+    const keptDomains = verified.filter(c => c.keep).map(c => c.domain.toLowerCase());
+    const annotations: Record<string, { parentCompany: string; productLine: string }> = {};
+    for (const v of verified) {
+      annotations[v.domain.toLowerCase()] = { parentCompany: v.parentCompany, productLine: v.productLine };
+    }
+
+    console.log(`[verify] ${verified.length} candidates → ${keptDomains.length} kept`);
+
+    // Fetch campaign metadata for verified domains + brand (from training data)
+    const sb = createSupabase(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const allDomains = [brandDomain.toLowerCase(), ...keptDomains];
+    const { data: campRows } = await sb
+      .from('ccr_training_data')
+      .select('advertiser_domain, data')
+      .eq('data_type', 'adv_campaign_channel_summary')
+      .in('advertiser_domain', allDomains);
+
+    // Select top 3 campaigns per domain (by rank)
+    const topCampaigns: Record<string, any[]> = {};
+    for (const row of campRows || []) {
+      const campaigns = Array.isArray(row.data) ? row.data : [];
+      const sorted = campaigns.sort((a: any, b: any) => (a.campaign_rank || 999) - (b.campaign_rank || 999));
+      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3);
+    }
+
+    // Write verified state to report_data — comparison table can render now
+    await mergeReportData(supabase, sessionId, {
+      phase: 'verified',
+      verifiedDomains: keptDomains,
+      annotations,
+      topCampaigns,
+    });
+
+    log.info('ccr-verify.complete', {
+      function_name: 'ccr-verify',
+      user_id: userId,
+      entity_id: sessionId,
+      meta: { verified: keptDomains.length, filtered: candidateDomains.length - keptDomains.length },
+    });
+
+    // GATE: insert 3 parallel tasks
+    const sharedPayload = { sessionId, jobId, brandDomain, userId, verifiedDomains: keptDomains, annotations };
+
+    await insertTasks(supabase, sessionId, [
+      { taskType: 'ccr_campaign_detail', payload: { ...sharedPayload, topCampaigns } },
+      { taskType: 'ccr_firecrawl', payload: { ...sharedPayload, topCampaigns } },
+      { taskType: 'ccr_publishers', payload: sharedPayload },
+    ]);
+
+  } catch (err) {
+    console.error('[verify] Error:', err);
+    await markError(supabase, sessionId, jobId, err as Error);
+  }
+};
+
+function fmtM(n: number): string {
+  if (!n) return '0';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
+export const config: Config = { background: true };
