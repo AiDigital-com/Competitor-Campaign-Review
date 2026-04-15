@@ -56,11 +56,23 @@ export default async (req: Request) => {
     });
 
     // Check if siblings are done → trigger synthesize
-    if (await areSiblingsComplete(supabase, sessionId, SIBLINGS)) {
-      await insertTasks(supabase, sessionId, [{
-        taskType: 'ccr_synthesize',
-        payload: { sessionId, jobId, brandDomain, userId },
-      }]);
+    try {
+      console.log('[publishers] Checking siblings for session:', sessionId);
+      const done = await areSiblingsComplete(supabase, sessionId, SIBLINGS);
+      console.log('[publishers] Siblings complete:', done);
+      if (done) {
+        await insertTasks(supabase, sessionId, [{
+          taskType: 'ccr_synthesize',
+          payload: { sessionId, jobId, brandDomain, userId },
+        }]);
+        console.log('[publishers] ccr_synthesize inserted');
+      }
+    } catch (sibErr) {
+      console.error('[publishers] Sibling check failed:', sibErr);
+      await supabase.from('pipeline_tasks')
+        .update({ result: { siblingError: String(sibErr) } })
+        .eq('scan_id', sessionId)
+        .eq('task_type', 'ccr_publishers');
     }
 
   } catch (err) {
