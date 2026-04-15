@@ -8,10 +8,9 @@ import type { Config } from '@netlify/functions';
 import { createClient as createSupabase } from '@supabase/supabase-js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
-  areSiblingsComplete, markError,
+  isPhase3DataComplete, markError,
 } from './_shared/pipeline.js';
 
-const SIBLINGS = ['ccr_campaign_detail', 'ccr_firecrawl', 'ccr_publishers'];
 
 export default async (req: Request) => {
   const { sessionId, jobId, brandDomain, userId, verifiedDomains } = await req.json();
@@ -55,24 +54,12 @@ export default async (req: Request) => {
       publishersByDomain,
     });
 
-    // Check if siblings are done → trigger synthesize
-    try {
-      console.log('[publishers] Checking siblings for session:', sessionId);
-      const done = await areSiblingsComplete(supabase, sessionId, SIBLINGS);
-      console.log('[publishers] Siblings complete:', done);
-      if (done) {
-        await insertTasks(supabase, sessionId, [{
-          taskType: 'ccr_synthesize',
-          payload: { sessionId, jobId, brandDomain, userId },
-        }]);
-        console.log('[publishers] ccr_synthesize inserted');
-      }
-    } catch (sibErr) {
-      console.error('[publishers] Sibling check failed:', sibErr);
-      await supabase.from('pipeline_tasks')
-        .update({ result: { siblingError: String(sibErr) } })
-        .eq('scan_id', sessionId)
-        .eq('task_type', 'ccr_publishers');
+    // Check if all Phase 3 data is present → trigger synthesize
+    if (await isPhase3DataComplete(supabase, sessionId)) {
+      await insertTasks(supabase, sessionId, [{
+        taskType: 'ccr_synthesize',
+        payload: { sessionId, jobId, brandDomain, userId },
+      }]);
     }
 
   } catch (err) {

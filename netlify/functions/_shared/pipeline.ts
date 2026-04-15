@@ -86,23 +86,27 @@ export async function insertTasks(
 }
 
 /**
- * Check if all sibling tasks of the same phase are complete.
- * Used by parallel Lambdas (3a/3b/3c) to know when to trigger Lambda 4.
+ * Check if all Phase 3 data sections are present in report_data.
+ * Used by parallel Lambdas (3a/3b/3c) — the last one to write triggers Lambda 4.
+ * Checks actual data presence rather than task status (which the task-worker
+ * marks "complete" on 202 before the background function finishes).
  */
-export async function areSiblingsComplete(
+export async function isPhase3DataComplete(
   supabase: SupabaseClient,
   sessionId: string,
-  siblingTaskTypes: string[],
 ): Promise<boolean> {
   const { data } = await supabase
-    .from('pipeline_tasks')
-    .select('task_type, status')
-    .eq('scan_id', sessionId)
-    .eq('app', APP_NAME)
-    .in('task_type', siblingTaskTypes);
+    .from(SESSION_TABLE)
+    .select('report_data')
+    .eq('id', sessionId)
+    .single();
 
-  if (!data || data.length < siblingTaskTypes.length) return false;
-  return data.every(t => t.status === 'complete');
+  const rd = (data?.report_data as Record<string, any>) || {};
+  const hasCampaigns = !!rd.brand && Array.isArray(rd.competitors);
+  const hasLandingPages = Array.isArray(rd.landingPages);
+  const hasPublishers = !!rd.publishersByDomain;
+
+  return hasCampaigns && hasLandingPages && hasPublishers;
 }
 
 /**

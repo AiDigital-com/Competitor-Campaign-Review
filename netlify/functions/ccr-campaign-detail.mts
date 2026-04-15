@@ -8,10 +8,9 @@ import type { Config } from '@netlify/functions';
 import { getAdClarityData } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,
-  areSiblingsComplete, markError,
+  isPhase3DataComplete, markError,
 } from './_shared/pipeline.js';
 
-const SIBLINGS = ['ccr_campaign_detail', 'ccr_firecrawl', 'ccr_publishers'];
 
 export default async (req: Request) => {
   const { sessionId, jobId, brandDomain, userId, verifiedDomains, annotations, topCampaigns } = await req.json();
@@ -56,24 +55,12 @@ export default async (req: Request) => {
 
     console.log(`[campaign-detail] Brand: ${brand.domain} (${brand.totalImpressions} imps), ${competitors.length} competitors`);
 
-    // Check if siblings are done → trigger synthesize
-    try {
-      console.log('[campaign-detail] Checking siblings for session:', sessionId);
-      const done = await areSiblingsComplete(supabase, sessionId, SIBLINGS);
-      console.log('[campaign-detail] Siblings complete:', done);
-      if (done) {
-        await insertTasks(supabase, sessionId, [{
-          taskType: 'ccr_synthesize',
-          payload: { sessionId, jobId, brandDomain, userId },
-        }]);
-        console.log('[campaign-detail] ccr_synthesize inserted');
-      }
-    } catch (sibErr) {
-      console.error('[campaign-detail] Sibling check failed:', sibErr);
-      await supabase.from('pipeline_tasks')
-        .update({ result: { siblingError: String(sibErr) } })
-        .eq('scan_id', sessionId)
-        .eq('task_type', 'ccr_campaign_detail');
+    // Check if all Phase 3 data is present → trigger synthesize
+    if (await isPhase3DataComplete(supabase, sessionId)) {
+      await insertTasks(supabase, sessionId, [{
+        taskType: 'ccr_synthesize',
+        payload: { sessionId, jobId, brandDomain, userId },
+      }]);
     }
 
   } catch (err) {
