@@ -159,14 +159,19 @@ export function CcrReport({ data }: Props) {
 
             return (
               <div key={comp.domain} style={{ marginBottom: '1.5rem' }}>
-                {/* Brand header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                {/* Brand header with parent company + product line */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.25rem' }}>
                   <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }}>{comp.domain}</span>
                   {isBrand && <StatusBadge status="info" label="Brand" />}
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     {fmtNumber(comp.totalImpressions)} imps · ${fmtMoney(comp.totalSpend)} · {campaigns.size} campaign{campaigns.size !== 1 ? 's' : ''}
                   </span>
                 </div>
+                {(comp.parentCompany || comp.productLine) && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                    {comp.parentCompany}{comp.productLine ? ` · ${comp.productLine}` : ''}
+                  </div>
+                )}
 
                 {/* Campaigns: horizontal scroll */}
                 <div style={{
