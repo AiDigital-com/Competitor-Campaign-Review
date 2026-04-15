@@ -90,15 +90,22 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
     }
 
     // Select top 3 campaigns per domain (by rank), attach landing page URL
+    // Campaign names differ by trailing ID suffix — match by prefix
     const topCampaigns: Record<string, any[]> = {};
     for (const row of campRows || []) {
       const campaigns = Array.isArray(row.data) ? row.data : [];
       const sorted = campaigns.sort((a: any, b: any) => (a.campaign_rank || 999) - (b.campaign_rank || 999));
       const domainLPs = lpByDomain[row.advertiser_domain] || {};
-      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3).map((c: any) => ({
-        ...c,
-        landing_page_url: domainLPs[c.creative_campaign_name] || null,
-      }));
+      const lpKeys = Object.keys(domainLPs);
+      topCampaigns[row.advertiser_domain] = sorted.slice(0, 3).map((c: any) => {
+        let lp = domainLPs[c.creative_campaign_name];
+        if (!lp) {
+          const campBase = (c.creative_campaign_name || '').replace(/\s+\d{7,}$/, '');
+          const match = lpKeys.find(k => k.startsWith(campBase) || campBase.startsWith(k));
+          if (match) lp = domainLPs[match];
+        }
+        return { ...c, landing_page_url: lp || null };
+      });
     }
 
     // Write verified state to report_data — comparison table can render now
