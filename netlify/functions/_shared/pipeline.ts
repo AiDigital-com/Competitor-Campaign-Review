@@ -78,11 +78,21 @@ export async function insertTasks(
 
   await supabase.from('pipeline_tasks').insert(rows);
 
-  // Kick task-worker to pick up immediately
+  // Kick task-worker to pick up immediately — MUST await to prevent silent failures
   const siteUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || '';
-  try {
-    fetch(`${siteUrl}/.netlify/functions/task-worker`, { method: 'POST' }).catch(() => {});
-  } catch {}
+  if (siteUrl) {
+    try {
+      const res = await fetch(`${siteUrl}/.netlify/functions/task-worker`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(10_000),
+      });
+      console.log(`[pipeline] Task-worker kick: ${res.status} for ${rows.map(r => r.task_type).join(', ')}`);
+    } catch (err) {
+      console.warn(`[pipeline] Task-worker kick failed for ${rows.map(r => r.task_type).join(', ')}:`, err);
+    }
+  } else {
+    console.warn('[pipeline] No site URL — cannot kick task-worker');
+  }
 }
 
 /**
