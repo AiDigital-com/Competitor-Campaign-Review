@@ -1,12 +1,15 @@
 /**
  * AdClarity data access layer.
  *
- * One query pattern, two backends:
- * - Production: BigQuery (requires bigquery.jobUser)
+ * Two backends, same query results:
+ * - Production: BigQuery raw table (GCP_PROJECT_ID + GCP_CLIENT_EMAIL + GCP_PRIVATE_KEY)
  * - Development: Supabase relational tables (ccr_adv_summary, ccr_campaign_channel_detail, etc.)
  *
- * Both backends have identical schemas. The data access functions
- * work the same regardless of which backend is active.
+ * COST SAFETY: Every BQ query MUST have:
+ *   1. WHERE month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) — limits scan window
+ *   2. WHERE advertiser_domain IN (...) — limits to requested domains only
+ *   3. LIMIT clause — caps row count
+ *   Raw table is 268M rows / 214GB. Unfiltered queries cost $$$.
  */
 import { createClient as createSupabase } from '@supabase/supabase-js';
 import type { CampaignData } from '../../../src/lib/types.js';
@@ -15,13 +18,79 @@ function getSupabase() {
   return createSupabase(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
+function useBQ(): boolean {
+  return !!(process.env.GCP_PROJECT_ID && (process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_CREDENTIALS));
+}
+
+async function getBQ() {
+  const { BigQuery } = await import('@google-cloud/bigquery');
+  const credentials = process.env.GOOGLE_CREDENTIALS
+    ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
+    : { client_email: process.env.GCP_CLIENT_EMAIL!, private_key: process.env.GCP_PRIVATE_KEY!.replace(/\\n/g, '\n') };
+  return new BigQuery({ projectId: process.env.GCP_PROJECT_ID!, credentials });
+}
+
+function rawTable(): string {
+  const p = process.env.GCP_PROJECT_ID!;
+  const ds = process.env.ADCLARITY_DATASET || 'adclarity_competitor_analysis';
+  const t = process.env.ADCLARITY_TABLE_NAME || 'adclarity_aws_monthly_test_2026';
+  return `\`${p}.${ds}.${t}\``;
+}
+
+/** COST SAFETY: 3-month rolling window filter. Applied to EVERY BQ query. */
+const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)`;
+
+/** Track BQ query as API cost (1 unit per query). Fire-and-forget. */
+async function trackBQUsage(queryName: string, userId?: string): Promise<void> {
+  try {
+    const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
+    const sb = getSupabase();
+    const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+    const uid = userId || 'system';
+    const orgId = await getUserOrgId(sb as any, uid).catch(() => null);
+    logTokenUsage(sb as any, {
+      userId: uid, orgId,
+      app: `competitor-campaign-review:${queryName}`,
+      source: detectSource(uid),
+      aiProvider: 'bigquery', aiModel: 'adclarity-raw',
+      inputTokens: 0, outputTokens: 1, totalTokens: 1,
+    }).catch(() => {});
+  } catch {}
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch summary data for domains. Returns one row per domain.
+ * Fetch summary data for domains.
  */
 export async function getAdSummary(domains: string[]): Promise<any[]> {
   const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          LOWER(advertiser_domain) as advertiser_domain,
+          SUM(impressions) as impressions,
+          SUM(spend) as spend,
+          COUNT(DISTINCT publisher_domain) as distinct_publishers,
+          COUNT(DISTINCT creative_id) as distinct_creatives,
+          SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions,
+          SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions,
+          SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions,
+          SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
+        GROUP BY 1`,
+      params: { domains: lower },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('summary');
+    console.log(`[BQ] getAdSummary: ${rows.length} rows for ${lower.length} domains`);
+    return rows;
+  }
+
   const sb = getSupabase();
   const { data } = await sb.from('ccr_adv_summary').select('*').in('advertiser_domain', lower);
   return data || [];
@@ -29,10 +98,38 @@ export async function getAdSummary(domains: string[]): Promise<any[]> {
 
 /**
  * Fetch campaign × channel detail for domains.
- * Includes landing_page_url, impressions, spend, creative/publisher counts.
  */
 export async function getCampaignDetail(domains: string[], limit = 50): Promise<any[]> {
   const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          LOWER(advertiser_domain) as advertiser_domain,
+          creative_campaign_name, channel_name,
+          advertiser_master_category, advertiser_second_category,
+          transaction_method,
+          ANY_VALUE(creative_landingpage_url) as landing_page_url,
+          SUM(impressions) as impressions, SUM(spend) as spend,
+          COUNT(DISTINCT creative_id) as creative_count,
+          COUNT(DISTINCT publisher_domain) as publisher_count,
+          MIN(creative_first_seen_date) as first_seen,
+          MAX(creative_last_seen_date) as last_seen
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
+        GROUP BY 1,2,3,4,5,6
+        ORDER BY impressions DESC
+        LIMIT @limit`,
+      params: { domains: lower, limit },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('campaign-detail');
+    console.log(`[BQ] getCampaignDetail: ${rows.length} rows`);
+    return rows.map(serializeDates);
+  }
+
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_campaign_channel_detail')
@@ -45,10 +142,36 @@ export async function getCampaignDetail(domains: string[], limit = 50): Promise<
 
 /**
  * Fetch creative detail for domains.
- * Includes creative URLs, landing pages, sizes, durations.
  */
 export async function getCreativeDetail(domains: string[], limit = 50): Promise<any[]> {
   const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          LOWER(advertiser_domain) as advertiser_domain,
+          CAST(creative_id AS STRING) as creative_id,
+          creative_campaign_name, channel_name,
+          creative_url_supplier, creative_landingpage_url,
+          creative_mime_type, creative_size, creative_video_duration,
+          MIN(creative_first_seen_date) as first_seen,
+          MAX(creative_last_seen_date) as last_seen,
+          SUM(impressions) as impressions, SUM(spend) as spend
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
+        GROUP BY 1,2,3,4,5,6,7,8,9
+        ORDER BY impressions DESC
+        LIMIT @limit`,
+      params: { domains: lower, limit },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('creative-detail');
+    console.log(`[BQ] getCreativeDetail: ${rows.length} rows`);
+    return rows.map(serializeDates);
+  }
+
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_creative_detail')
@@ -64,6 +187,33 @@ export async function getCreativeDetail(domains: string[], limit = 50): Promise<
  */
 export async function getPublisherData(domains: string[], limit = 50): Promise<any[]> {
   const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          LOWER(advertiser_domain) as advertiser_domain,
+          publisher_domain as publisher_group,
+          transaction_method,
+          SUM(impressions) as impressions, SUM(spend) as spend,
+          SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions,
+          SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions,
+          SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions,
+          SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
+        GROUP BY 1,2,3
+        ORDER BY impressions DESC
+        LIMIT @limit`,
+      params: { domains: lower, limit },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('publisher-data');
+    console.log(`[BQ] getPublisherData: ${rows.length} rows`);
+    return rows;
+  }
+
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_publisher_channel_method')
@@ -79,6 +229,27 @@ export async function getPublisherData(domains: string[], limit = 50): Promise<a
  */
 export async function getExpenditureTrend(domains: string[]): Promise<any[]> {
   const lower = domains.map(d => d.toLowerCase());
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          LOWER(advertiser_domain) as advertiser_domain,
+          month, SUM(impressions) as impressions, SUM(spend) as spend
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) IN UNNEST(@domains)
+        GROUP BY 1,2
+        ORDER BY month ASC
+        LIMIT 500`,
+      params: { domains: lower },
+      types: { domains: ['STRING'] },
+    });
+    await trackBQUsage('expenditure-trend');
+    console.log(`[BQ] getExpenditureTrend: ${rows.length} rows`);
+    return rows.map(serializeDates);
+  }
+
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_expenditure_trend')
@@ -89,10 +260,36 @@ export async function getExpenditureTrend(domains: string[]): Promise<any[]> {
 }
 
 /**
- * Discover top ad competitors by impressions (excluding the brand).
+ * Discover top ad competitors by impressions (same category, excluding the brand).
  */
 export async function discoverAdCompetitors(brandDomain: string, limit = 10): Promise<string[]> {
   const brand = brandDomain.toLowerCase();
+
+  if (useBQ()) {
+    const bq = await getBQ();
+    const [rows] = await bq.query({
+      query: `
+        WITH brand_cat AS (
+          SELECT advertiser_second_category
+          FROM ${rawTable()}
+          WHERE LOWER(advertiser_domain) = @brand AND ${DATE_FILTER}
+          LIMIT 1
+        )
+        SELECT LOWER(advertiser_domain) as advertiser_domain, SUM(impressions) as impressions
+        FROM ${rawTable()}
+        WHERE LOWER(advertiser_domain) != @brand
+          AND ${DATE_FILTER}
+          AND advertiser_second_category = (SELECT advertiser_second_category FROM brand_cat)
+        GROUP BY 1
+        ORDER BY impressions DESC
+        LIMIT @limit`,
+      params: { brand, limit },
+    });
+    await trackBQUsage('discover-competitors');
+    console.log(`[BQ] discoverAdCompetitors: ${rows.length} competitors for ${brand}`);
+    return rows.map((r: any) => r.advertiser_domain);
+  }
+
   const sb = getSupabase();
   const { data } = await sb
     .from('ccr_adv_summary')
@@ -105,8 +302,6 @@ export async function discoverAdCompetitors(brandDomain: string, limit = 10): Pr
 
 /**
  * Build CampaignData objects for a set of domains.
- * Combines summary + creative detail + publishers.
- * Same output shape regardless of backend.
  */
 export async function getAdClarityData(domains: string[]): Promise<CampaignData[]> {
   const [summaries, creatives, pubs] = await Promise.all([
@@ -176,4 +371,14 @@ export async function getAdClarityData(domains: string[]): Promise<CampaignData[
       creatives: domainCreatives,
     };
   }).filter((d): d is CampaignData => d !== null);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function serializeDates(row: any): any {
+  const out: any = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = v && typeof v === 'object' && (v as any).value ? (v as any).value : v;
+  }
+  return out;
 }
