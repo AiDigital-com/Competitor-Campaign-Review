@@ -46,8 +46,8 @@ function rawTable(): string {
   return `\`${p}.${ds}.${t}\``;
 }
 
-/** COST SAFETY: 3-month rolling window filter. Applied to EVERY BQ query. */
-const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)`;
+/** COST SAFETY: 1-month rolling window filter. Applied to EVERY BQ query. */
+const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)`;
 
 /** Track BQ query as API cost (1 unit per query). Fire-and-forget. */
 async function trackBQUsage(queryName: string, userId?: string): Promise<void> {

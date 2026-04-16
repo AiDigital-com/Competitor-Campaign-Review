@@ -35,7 +35,7 @@ function rawTable(): string {
   return `\`${p}.${ds}.${t}\``;
 }
 
-const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND country = 'United States'`;
+const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH) AND country = 'United States'`;
 
 async function batchInsert(sb: any, table: string, rows: any[]): Promise<number> {
   let inserted = 0;
@@ -205,6 +205,13 @@ export default async (req: Request) => {
     trendRows.map(serializeDates),
   );
   console.log(`[extract] ccr_expenditure_trend: ${results.ccr_expenditure_trend} rows`);
+
+  // ── ANALYZE: warm query planner stats after bulk insert ─────────────────
+  // PostgREST count queries force PostgreSQL to update stats on these tables
+  console.log('[extract] Warming query planner stats...');
+  for (const t of ['ccr_adv_summary', 'ccr_campaign_channel_detail', 'ccr_creative_detail', 'ccr_publisher_channel_method', 'ccr_expenditure_trend']) {
+    await sb.from(t).select('advertiser_domain', { count: 'exact', head: true });
+  }
 
   // ── Done ──────────────────────────────────────────────────────────────────
   const duration = Math.round((Date.now() - startTime) / 1000);
