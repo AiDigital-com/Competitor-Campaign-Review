@@ -61,9 +61,14 @@ function serializeDates(row: any): any {
 }
 
 /**
- * POST body: { "table": "summary" | "campaigns" | "creatives" | "publishers" | "trends" }
- * Runs ONE table extraction per call. Call 5 times for full extraction.
- * This way each table is independent — retry individually if one fails.
+ * POST body:
+ *   { "table": "summary" | "campaigns" | "creatives" | "publishers" | "trends" }
+ *   { "table": "campaigns", "range": "a-f" }  — split by first letter of domain
+ *
+ * For large tables, use "range" to split into 4 chunks:
+ *   "a-f", "g-l", "m-r", "s-z" (s-z includes numbers/symbols)
+ *
+ * With range: only deletes+inserts matching domains. Without range: truncates all.
  */
 export default async (req: Request) => {
   const startTime = Date.now();
@@ -76,23 +81,53 @@ export default async (req: Request) => {
 
   const body = await req.json().catch(() => ({}));
   const target = (body.table || '').toLowerCase();
+  const range = (body.range || '').toLowerCase();
   const validTargets = ['summary', 'campaigns', 'creatives', 'publishers', 'trends'];
   if (!validTargets.includes(target)) {
     console.error(`[extract] Invalid table: "${target}". Use one of: ${validTargets.join(', ')}`);
     return;
   }
 
+  // Domain range filter for BQ — splits data into 4 chunks
+  const rangeMap: Record<string, string> = {
+    'a-f': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'a' AND 'f'`,
+    'g-l': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'g' AND 'l'`,
+    'm-r': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'm' AND 'r'`,
+    's-z': `AND (LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 's' AND 'z' OR LOWER(SUBSTR(advertiser_domain, 1, 1)) < 'a')`,
+  };
+  const domainRangeFilter = rangeMap[range] || '';
+
   const bq = await getBQ();
   const table = rawTable();
   const results: Record<string, number> = {};
 
-  console.log(`[extract] Starting BQ extraction: table=${target} from ${table}`);
-  console.log(`[extract] Date filter: ${DATE_FILTER}`);
+  console.log(`[extract] Starting BQ extraction: table=${target} range=${range || 'all'} from ${table}`);
+  console.log(`[extract] Date filter: ${DATE_FILTER} ${domainRangeFilter}`);
+
+  // Helper: truncate only matching range, or all if no range
+  async function truncateTable(sbTable: string) {
+    if (range) {
+      // Delete only domains in this range
+      const rangeDeleteMap: Record<string, [string, string]> = {
+        'a-f': ['a', 'g'], 'g-l': ['g', 'm'], 'm-r': ['m', 's'], 's-z': ['s', '~'],
+      };
+      const [from, to] = rangeDeleteMap[range] || ['', ''];
+      if (from) {
+        await sb.from(sbTable).delete().gte('advertiser_domain', from).lt('advertiser_domain', to);
+        // Also handle numeric/symbol domains for s-z range
+        if (range === 's-z') {
+          await sb.from(sbTable).delete().lt('advertiser_domain', 'a');
+        }
+      }
+    } else {
+      await sb.from(sbTable).delete().neq('advertiser_domain', '');
+    }
+  }
 
   // ── 1. ADV SUMMARY ───────────────────────────────────────────────────────
   if (target === 'summary') {
   console.log('[extract] ccr_adv_summary...');
-  await sb.from('ccr_adv_summary').delete().neq('advertiser_domain', '');
+  await truncateTable('ccr_adv_summary');
 
   const [summaryRows] = await bq.query({
     query: `
@@ -108,7 +143,7 @@ export default async (req: Request) => {
         SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions,
         SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
       FROM ${table}
-      WHERE ${DATE_FILTER}
+      WHERE ${DATE_FILTER} ${domainRangeFilter}
       GROUP BY 1
       ORDER BY impressions DESC`,
   });
@@ -119,7 +154,7 @@ export default async (req: Request) => {
   // ── 2. CAMPAIGN CHANNEL DETAIL ────────────────────────────────────────────
   if (target === 'campaigns') {
   console.log('[extract] ccr_campaign_channel_detail...');
-  await sb.from('ccr_campaign_channel_detail').delete().neq('advertiser_domain', '');
+  await truncateTable('ccr_campaign_channel_detail');
 
   const [campaignRows] = await bq.query({
     query: `
@@ -137,7 +172,7 @@ export default async (req: Request) => {
         MIN(creative_first_seen_date) as first_seen,
         MAX(creative_last_seen_date) as last_seen
       FROM ${table}
-      WHERE ${DATE_FILTER}
+      WHERE ${DATE_FILTER} ${domainRangeFilter}
       GROUP BY 1,3,4,5,6,7
       ORDER BY impressions DESC`,
   });
@@ -151,7 +186,7 @@ export default async (req: Request) => {
   // ── 3. CREATIVE DETAIL ────────────────────────────────────────────────────
   if (target === 'creatives') {
   console.log('[extract] ccr_creative_detail...');
-  await sb.from('ccr_creative_detail').delete().neq('advertiser_domain', '');
+  await truncateTable('ccr_creative_detail');
 
   const [creativeRows] = await bq.query({
     query: `
@@ -167,7 +202,7 @@ export default async (req: Request) => {
         SUM(impressions) as impressions, SUM(spend) as spend,
         AVG(ctr) as ctr
       FROM ${table}
-      WHERE ${DATE_FILTER}
+      WHERE ${DATE_FILTER} ${domainRangeFilter}
       GROUP BY 1,3,4,5,6,7,8,9,10
       ORDER BY impressions DESC`,
   });
@@ -181,7 +216,7 @@ export default async (req: Request) => {
   // ── 4. PUBLISHER CHANNEL METHOD ───────────────────────────────────────────
   if (target === 'publishers') {
   console.log('[extract] ccr_publisher_channel_method...');
-  await sb.from('ccr_publisher_channel_method').delete().neq('advertiser_domain', '');
+  await truncateTable('ccr_publisher_channel_method');
 
   const [publisherRows] = await bq.query({
     query: `
@@ -196,7 +231,7 @@ export default async (req: Request) => {
         SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions,
         SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
       FROM ${table}
-      WHERE ${DATE_FILTER}
+      WHERE ${DATE_FILTER} ${domainRangeFilter}
       GROUP BY 1,3,4
       ORDER BY impressions DESC`,
   });
@@ -210,7 +245,7 @@ export default async (req: Request) => {
   // ── 5. EXPENDITURE TREND ──────────────────────────────────────────────────
   if (target === 'trends') {
   console.log('[extract] ccr_expenditure_trend...');
-  await sb.from('ccr_expenditure_trend').delete().neq('advertiser_domain', '');
+  await truncateTable('ccr_expenditure_trend');
 
   const [trendRows] = await bq.query({
     query: `
@@ -219,7 +254,7 @@ export default async (req: Request) => {
         'United States' as country,
         month, SUM(impressions) as impressions, SUM(spend) as spend
       FROM ${table}
-      WHERE ${DATE_FILTER}
+      WHERE ${DATE_FILTER} ${domainRangeFilter}
       GROUP BY 1,3
       ORDER BY month ASC, impressions DESC`,
   });
