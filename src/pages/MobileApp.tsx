@@ -79,7 +79,8 @@ export default function MobileApp() {
         }),
       })
 
-      if (!res.ok) {
+      // 504 = dispatch function timed out waiting for task-worker kick, but pipeline started
+      if (!res.ok && res.status !== 504) {
         const err = await res.json().catch(() => ({ error: 'Dispatch failed' }))
         if (res.status === 429) {
           setCampaignGateMessage(err.ended_message || 'Campaign usage limit reached.')
