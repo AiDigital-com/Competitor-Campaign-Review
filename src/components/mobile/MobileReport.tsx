@@ -136,18 +136,33 @@ export function MobileReport({ data }: Props) {
                     <span>${fmtMoney(comp.totalSpend)}</span>
                     <span>${cpm.toFixed(2)} CPM</span>
                   </div>
-                  {top && (
-                    <>
-                      <div className="ccr-m-card-campaign">{top.name}</div>
-                      <div className="ccr-m-carousel">
-                        {top.creatives.slice(0, 6).map(c => (
-                          <div key={c.id} className="ccr-m-carousel-item">
-                            <AssetPreview type={isVideoUrl(c.url) ? 'video' : 'image'} url={c.url} />
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                  {top && (() => {
+                    const lp = (data.landingPages || []).find((l: any) =>
+                      l.domain === comp.domain && campaignName(l.campaignName) === top.name
+                    )
+                    return (
+                      <>
+                        <div className="ccr-m-card-campaign">{top.name}</div>
+                        <div className="ccr-m-carousel">
+                          {top.creatives.slice(0, 2).map(c => (
+                            <div key={c.id} className="ccr-m-carousel-item">
+                              <AssetPreview type={isVideoUrl(c.url) ? 'video' : 'image'} url={c.url} />
+                            </div>
+                          ))}
+                          {lp?.screenshotUrl && (
+                            <div className="ccr-m-carousel-item">
+                              <AssetPreview type="image" url={lp.screenshotUrl} label={lp.title || 'Landing Page'} />
+                            </div>
+                          )}
+                          {lp && !lp.screenshotUrl && lp.url && (
+                            <div className="ccr-m-carousel-item">
+                              <AssetPreview type="url" url={lp.url} label={lp.title || 'Landing Page'} />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
                   {!top && (
                     <div className="ccr-m-card-campaign" style={{ opacity: 0.5 }}>No creative data</div>
                   )}
