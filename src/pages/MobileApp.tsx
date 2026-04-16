@@ -1,6 +1,7 @@
 /**
  * CCR Mobile App — /m route
  * Anonymous, no Clerk auth. Phase state machine.
+ * Campaign gating via ?c=<slug> param.
  * Same N-Lambda pipeline backend, simplified mobile report.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -10,18 +11,53 @@ import { MobileIntake } from '../components/mobile/MobileIntake'
 import { MobileReport } from '../components/mobile/MobileReport'
 import '../ccr-mobile.css'
 
-type Phase = 'intake' | 'processing' | 'report_ready' | 'error'
+type Phase = 'loading' | 'campaign_gate' | 'intake' | 'processing' | 'report_ready' | 'error'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 export default function MobileApp() {
-  const [phase, setPhase] = useState<Phase>('intake')
+  const [phase, setPhase] = useState<Phase>('loading')
   const [jobId, setJobId] = useState<string | null>(null)
   const [reportData, setReportData] = useState<Record<string, any> | null>(null)
   const [progressStep, setProgressStep] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const [campaignSlug, setCampaignSlug] = useState<string | null>(null)
+  const [campaignGateMessage, setCampaignGateMessage] = useState<string | null>(null)
   const supabaseRef = useRef(createClient(supabaseUrl, supabaseAnonKey))
+
+  // Check campaign slug on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const slug = params.get('c')
+
+    if (!slug) {
+      setPhase('intake')
+      return
+    }
+
+    setCampaignSlug(slug)
+    fetch(`/.netlify/functions/mobile-check-campaign?c=${encodeURIComponent(slug)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setPhase('intake')
+        } else {
+          setCampaignGateMessage(
+            data.ended_message ||
+            (data.reason === 'limit_reached' ? 'This campaign has reached its usage limit.' :
+             data.reason === 'campaign_ended' ? 'This campaign has ended.' :
+             data.reason === 'not_started' ? 'This campaign has not started yet.' :
+             data.reason === 'campaign_inactive' ? 'This campaign is currently inactive.' :
+             'Campaign not available.')
+          )
+          setPhase('campaign_gate')
+        }
+      })
+      .catch(() => {
+        setPhase('intake') // Proceed without campaign gating on check failure
+      })
+  }, [])
 
   // Submit brand domain → dispatch pipeline
   const handleSubmit = useCallback(async (brandDomain: string) => {
@@ -39,18 +75,24 @@ export default function MobileApp() {
         body: JSON.stringify({
           jobId: sessionId,
           intakeSummary: { brand_domain: brandDomain, source: 'url', brand_name: brandDomain },
+          ...(campaignSlug ? { campaignSlug } : {}),
         }),
       })
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Dispatch failed' }))
+        if (res.status === 429) {
+          setCampaignGateMessage(err.ended_message || 'Campaign usage limit reached.')
+          setPhase('campaign_gate')
+          return
+        }
         throw new Error(err.error || `HTTP ${res.status}`)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to start analysis')
       setPhase('error')
     }
-  }, [])
+  }, [campaignSlug])
 
   // Subscribe to job_status for progress steps
   useEffect(() => {
@@ -79,7 +121,6 @@ export default function MobileApp() {
     if (!jobId) return
     const sb = supabaseRef.current
 
-    // Initial fetch
     sb.from('ccr_sessions').select('report_data, status')
       .eq('id', jobId).single()
       .then(({ data }) => {
@@ -137,6 +178,18 @@ export default function MobileApp() {
       </header>
 
       <main className="ccr-m-main">
+        {phase === 'loading' && (
+          <div className="ccr-m-loading">
+            <ProgressBar />
+          </div>
+        )}
+
+        {phase === 'campaign_gate' && (
+          <div className="ccr-m-gate">
+            <p>{campaignGateMessage}</p>
+          </div>
+        )}
+
         {phase === 'intake' && (
           <MobileIntake onSubmit={handleSubmit} />
         )}
