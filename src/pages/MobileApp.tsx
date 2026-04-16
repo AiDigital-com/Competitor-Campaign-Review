@@ -59,35 +59,52 @@ export default function MobileApp() {
       })
   }, [])
 
-  // Submit brand domain → dispatch pipeline
-  const handleSubmit = useCallback(async (brandDomain: string) => {
+  // Submit: mobile orchestrator resolves brand → dispatch pipeline
+  const handleSubmit = useCallback(async (userInput: string) => {
     setPhase('processing')
-    setProgressStep('Discovering competitors…')
+    setProgressStep('Resolving brand…')
     setError(null)
 
     try {
+      // Step 1: Resolve brand input → domain via mobile orchestrator
+      const resolveRes = await fetch('/.netlify/functions/mobile-orchestrator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mobile-Source': 'ccr-mobile' },
+        body: JSON.stringify({ userInput }),
+      })
+
+      if (!resolveRes.ok) {
+        const err = await resolveRes.json().catch(() => ({ error: 'Resolution failed' }))
+        throw new Error(err.error || `Could not resolve brand`)
+      }
+
+      const { brand_domain } = await resolveRes.json()
+      if (!brand_domain) throw new Error('Could not resolve brand domain')
+
+      // Step 2: Dispatch pipeline with resolved domain
+      setProgressStep('Discovering competitors…')
       const sessionId = crypto.randomUUID()
       setJobId(sessionId)
 
-      const res = await fetch('/.netlify/functions/mobile-submit', {
+      const dispatchRes = await fetch('/.netlify/functions/mobile-submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId: sessionId,
-          intakeSummary: { brand_domain: brandDomain, source: 'url', brand_name: brandDomain },
+          intakeSummary: { brand_domain, source: 'url', brand_name: brand_domain },
           ...(campaignSlug ? { campaignSlug } : {}),
         }),
       })
 
-      // 504 = dispatch function timed out waiting for task-worker kick, but pipeline started
-      if (!res.ok && res.status !== 504) {
-        const err = await res.json().catch(() => ({ error: 'Dispatch failed' }))
-        if (res.status === 429) {
+      // 504 = kick timeout, pipeline still started
+      if (!dispatchRes.ok && dispatchRes.status !== 504) {
+        const err = await dispatchRes.json().catch(() => ({ error: 'Dispatch failed' }))
+        if (dispatchRes.status === 429) {
           setCampaignGateMessage(err.ended_message || 'Campaign usage limit reached.')
           setPhase('campaign_gate')
           return
         }
-        throw new Error(err.error || `HTTP ${res.status}`)
+        throw new Error(err.error || `HTTP ${dispatchRes.status}`)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to start analysis')

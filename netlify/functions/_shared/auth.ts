@@ -28,6 +28,12 @@ export async function requireAuthOrEmbed(req: Request): Promise<{ userId: string
     return { userId: `embed:${data.org_id || 'anonymous'}`, email: null, isEmbed: true };
   }
 
+  // Check mobile anonymous access
+  const mobileSource = req.headers.get('X-Mobile-Source');
+  if (mobileSource === 'ccr-mobile') {
+    return { userId: 'mobile:anonymous', email: null };
+  }
+
   // Check API key (for API and internal dispatch calls)
   // Access control is skipped for api: users — they are pre-authorized via key validation
   const apiKey = req.headers.get('X-API-Key');
