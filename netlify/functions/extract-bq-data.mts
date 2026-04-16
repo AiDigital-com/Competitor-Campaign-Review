@@ -35,7 +35,7 @@ function rawTable(): string {
   return `\`${p}.${ds}.${t}\``;
 }
 
-const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)`;
+const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND country = 'United States'`;
 
 async function batchInsert(sb: any, table: string, rows: any[]): Promise<number> {
   let inserted = 0;
@@ -83,7 +83,7 @@ export default async (req: Request) => {
     query: `
       SELECT
         LOWER(advertiser_domain) as advertiser_domain,
-        country,
+        'United States' as country,
         SUM(impressions) as impressions,
         SUM(spend) as spend,
         COUNT(DISTINCT publisher_domain) as distinct_publishers,
@@ -94,7 +94,7 @@ export default async (req: Request) => {
         SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
       FROM ${table}
       WHERE ${DATE_FILTER}
-      GROUP BY 1, 2
+      GROUP BY 1
       ORDER BY impressions DESC`,
   });
   results.ccr_adv_summary = await batchInsert(sb, 'ccr_adv_summary', summaryRows);
@@ -108,7 +108,7 @@ export default async (req: Request) => {
     query: `
       SELECT
         LOWER(advertiser_domain) as advertiser_domain,
-        country,
+        'United States' as country,
         creative_campaign_name, channel_name,
         advertiser_master_category, advertiser_second_category,
         transaction_method,
@@ -121,7 +121,7 @@ export default async (req: Request) => {
         MAX(creative_last_seen_date) as last_seen
       FROM ${table}
       WHERE ${DATE_FILTER}
-      GROUP BY 1,2,3,4,5,6,7
+      GROUP BY 1,3,4,5,6,7
       ORDER BY impressions DESC`,
   });
   results.ccr_campaign_channel_detail = await batchInsert(
@@ -138,7 +138,7 @@ export default async (req: Request) => {
     query: `
       SELECT
         LOWER(advertiser_domain) as advertiser_domain,
-        country,
+        'United States' as country,
         CAST(creative_id AS STRING) as creative_id,
         creative_campaign_name, channel_name,
         creative_url_supplier, creative_landingpage_url,
@@ -149,7 +149,7 @@ export default async (req: Request) => {
         AVG(ctr) as ctr
       FROM ${table}
       WHERE ${DATE_FILTER}
-      GROUP BY 1,2,3,4,5,6,7,8,9,10
+      GROUP BY 1,3,4,5,6,7,8,9,10
       ORDER BY impressions DESC`,
   });
   results.ccr_creative_detail = await batchInsert(
@@ -166,7 +166,7 @@ export default async (req: Request) => {
     query: `
       SELECT
         LOWER(advertiser_domain) as advertiser_domain,
-        country,
+        'United States' as country,
         publisher_domain as publisher_group,
         transaction_method,
         SUM(impressions) as impressions, SUM(spend) as spend,
@@ -176,7 +176,7 @@ export default async (req: Request) => {
         SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions
       FROM ${table}
       WHERE ${DATE_FILTER}
-      GROUP BY 1,2,3,4
+      GROUP BY 1,3,4
       ORDER BY impressions DESC`,
   });
   results.ccr_publisher_channel_method = await batchInsert(
@@ -193,11 +193,11 @@ export default async (req: Request) => {
     query: `
       SELECT
         LOWER(advertiser_domain) as advertiser_domain,
-        country,
+        'United States' as country,
         month, SUM(impressions) as impressions, SUM(spend) as spend
       FROM ${table}
       WHERE ${DATE_FILTER}
-      GROUP BY 1,2,3
+      GROUP BY 1,3
       ORDER BY month ASC, impressions DESC`,
   });
   results.ccr_expenditure_trend = await batchInsert(
