@@ -88,14 +88,20 @@ export default async (req: Request) => {
     return;
   }
 
-  // Domain range filter for BQ — splits data into 4 chunks
-  const rangeMap: Record<string, string> = {
-    'a-f': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'a' AND 'f'`,
-    'g-l': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'g' AND 'l'`,
-    'm-r': `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 'm' AND 'r'`,
-    's-z': `AND (LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN 's' AND 'z' OR LOWER(SUBSTR(advertiser_domain, 1, 1)) < 'a')`,
-  };
-  const domainRangeFilter = rangeMap[range] || '';
+  // Domain range filter — single letter ("a") or range ("a-c") or "num" for non-alpha
+  let domainRangeFilter = '';
+  if (range.length === 1 && range >= 'a' && range <= 'z') {
+    domainRangeFilter = `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) = '${range}'`;
+  } else if (/^[a-z]-[a-z]$/.test(range)) {
+    const [from, to] = range.split('-');
+    if (to === 'z') {
+      domainRangeFilter = `AND (LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN '${from}' AND 'z' OR LOWER(SUBSTR(advertiser_domain, 1, 1)) < 'a')`;
+    } else {
+      domainRangeFilter = `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) BETWEEN '${from}' AND '${to}'`;
+    }
+  } else if (range === 'num') {
+    domainRangeFilter = `AND LOWER(SUBSTR(advertiser_domain, 1, 1)) < 'a'`;
+  }
 
   const bq = await getBQ();
   const table = rawTable();
@@ -104,23 +110,23 @@ export default async (req: Request) => {
   console.log(`[extract] Starting BQ extraction: table=${target} range=${range || 'all'} from ${table}`);
   console.log(`[extract] Date filter: ${DATE_FILTER} ${domainRangeFilter}`);
 
-  // Helper: truncate only matching range, or all if no range
+  // Helper: delete only matching range, or all if no range
   async function truncateTable(sbTable: string) {
-    if (range) {
-      // Delete only domains in this range
-      const rangeDeleteMap: Record<string, [string, string]> = {
-        'a-f': ['a', 'g'], 'g-l': ['g', 'm'], 'm-r': ['m', 's'], 's-z': ['s', '~'],
-      };
-      const [from, to] = rangeDeleteMap[range] || ['', ''];
-      if (from) {
-        await sb.from(sbTable).delete().gte('advertiser_domain', from).lt('advertiser_domain', to);
-        // Also handle numeric/symbol domains for s-z range
-        if (range === 's-z') {
-          await sb.from(sbTable).delete().lt('advertiser_domain', 'a');
-        }
-      }
-    } else {
+    if (!range) {
       await sb.from(sbTable).delete().neq('advertiser_domain', '');
+    } else if (range.length === 1) {
+      // Single letter: delete domains starting with that letter
+      const next = String.fromCharCode(range.charCodeAt(0) + 1);
+      await sb.from(sbTable).delete().gte('advertiser_domain', range).lt('advertiser_domain', next);
+    } else if (/^[a-z]-[a-z]$/.test(range)) {
+      const [from, to] = range.split('-');
+      const next = String.fromCharCode(to.charCodeAt(0) + 1);
+      await sb.from(sbTable).delete().gte('advertiser_domain', from).lt('advertiser_domain', next);
+      if (to === 'z') {
+        await sb.from(sbTable).delete().lt('advertiser_domain', 'a');
+      }
+    } else if (range === 'num') {
+      await sb.from(sbTable).delete().lt('advertiser_domain', 'a');
     }
   }
 
