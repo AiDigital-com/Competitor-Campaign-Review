@@ -34,7 +34,7 @@ function rawTable(): string {
   return `\`${p}.${ds}.${t}\``;
 }
 
-const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH) AND country = 'United States'`;
+const DATE_FILTER = `month >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH) AND country = 'United States'`;
 
 function serializeDates(row: any): any {
   const out: any = {};

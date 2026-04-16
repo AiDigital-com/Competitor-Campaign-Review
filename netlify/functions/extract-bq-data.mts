@@ -35,7 +35,8 @@ function rawTable(): string {
   return `\`${p}.${ds}.${t}\``;
 }
 
-const DATE_FILTER = `month >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH) AND country = 'United States'`;
+/** 1-month window: most recent full month. DATE_TRUNC gives first-of-month so we capture the whole month. */
+const DATE_FILTER = `month >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH) AND country = 'United States'`;
 
 async function batchInsert(sb: any, table: string, rows: any[]): Promise<number> {
   let inserted = 0;
