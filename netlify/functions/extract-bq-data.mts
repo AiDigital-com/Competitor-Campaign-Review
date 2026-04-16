@@ -60,6 +60,11 @@ function serializeDates(row: any): any {
   return out;
 }
 
+/**
+ * POST body: { "table": "summary" | "campaigns" | "creatives" | "publishers" | "trends" }
+ * Runs ONE table extraction per call. Call 5 times for full extraction.
+ * This way each table is independent — retry individually if one fails.
+ */
 export default async (req: Request) => {
   const startTime = Date.now();
   const sb = getSupabase();
@@ -69,15 +74,24 @@ export default async (req: Request) => {
     return;
   }
 
+  const body = await req.json().catch(() => ({}));
+  const target = (body.table || '').toLowerCase();
+  const validTargets = ['summary', 'campaigns', 'creatives', 'publishers', 'trends'];
+  if (!validTargets.includes(target)) {
+    console.error(`[extract] Invalid table: "${target}". Use one of: ${validTargets.join(', ')}`);
+    return;
+  }
+
   const bq = await getBQ();
   const table = rawTable();
   const results: Record<string, number> = {};
 
-  console.log(`[extract] Starting BQ extraction from ${table}`);
+  console.log(`[extract] Starting BQ extraction: table=${target} from ${table}`);
   console.log(`[extract] Date filter: ${DATE_FILTER}`);
 
   // ── 1. ADV SUMMARY ───────────────────────────────────────────────────────
-  console.log('[extract] 1/5: ccr_adv_summary...');
+  if (target === 'summary') {
+  console.log('[extract] ccr_adv_summary...');
   await sb.from('ccr_adv_summary').delete().neq('advertiser_domain', '');
 
   const [summaryRows] = await bq.query({
@@ -100,9 +114,11 @@ export default async (req: Request) => {
   });
   results.ccr_adv_summary = await batchInsert(sb, 'ccr_adv_summary', summaryRows);
   console.log(`[extract] ccr_adv_summary: ${results.ccr_adv_summary} rows`);
+  }
 
   // ── 2. CAMPAIGN CHANNEL DETAIL ────────────────────────────────────────────
-  console.log('[extract] 2/5: ccr_campaign_channel_detail...');
+  if (target === 'campaigns') {
+  console.log('[extract] ccr_campaign_channel_detail...');
   await sb.from('ccr_campaign_channel_detail').delete().neq('advertiser_domain', '');
 
   const [campaignRows] = await bq.query({
@@ -130,9 +146,11 @@ export default async (req: Request) => {
     campaignRows.map(serializeDates),
   );
   console.log(`[extract] ccr_campaign_channel_detail: ${results.ccr_campaign_channel_detail} rows`);
+  }
 
   // ── 3. CREATIVE DETAIL ────────────────────────────────────────────────────
-  console.log('[extract] 3/5: ccr_creative_detail...');
+  if (target === 'creatives') {
+  console.log('[extract] ccr_creative_detail...');
   await sb.from('ccr_creative_detail').delete().neq('advertiser_domain', '');
 
   const [creativeRows] = await bq.query({
@@ -158,9 +176,11 @@ export default async (req: Request) => {
     creativeRows.map(serializeDates),
   );
   console.log(`[extract] ccr_creative_detail: ${results.ccr_creative_detail} rows`);
+  }
 
   // ── 4. PUBLISHER CHANNEL METHOD ───────────────────────────────────────────
-  console.log('[extract] 4/5: ccr_publisher_channel_method...');
+  if (target === 'publishers') {
+  console.log('[extract] ccr_publisher_channel_method...');
   await sb.from('ccr_publisher_channel_method').delete().neq('advertiser_domain', '');
 
   const [publisherRows] = await bq.query({
@@ -185,9 +205,11 @@ export default async (req: Request) => {
     publisherRows,
   );
   console.log(`[extract] ccr_publisher_channel_method: ${results.ccr_publisher_channel_method} rows`);
+  }
 
   // ── 5. EXPENDITURE TREND ──────────────────────────────────────────────────
-  console.log('[extract] 5/5: ccr_expenditure_trend...');
+  if (target === 'trends') {
+  console.log('[extract] ccr_expenditure_trend...');
   await sb.from('ccr_expenditure_trend').delete().neq('advertiser_domain', '');
 
   const [trendRows] = await bq.query({
@@ -206,6 +228,7 @@ export default async (req: Request) => {
     trendRows.map(serializeDates),
   );
   console.log(`[extract] ccr_expenditure_trend: ${results.ccr_expenditure_trend} rows`);
+  }
 
   // ── ANALYZE: warm query planner stats after bulk insert ─────────────────
   // PostgREST count queries force PostgreSQL to update stats on these tables
