@@ -109,28 +109,28 @@ export default async (req: Request) => {
     const sb = getSupabase();
     const results: Record<string, number> = {};
 
-    // 1. Summary
-    const [s] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, SUM(impressions) as impressions, SUM(spend) as spend, COUNT(DISTINCT publisher_domain) as distinct_publishers, COUNT(DISTINCT creative_id) as distinct_creatives, SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions, SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions, SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions, SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,2` });
+    // 1. Summary (GROUP BY 1 = domain)
+    const [s] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, 'United States' as country, SUM(impressions) as impressions, SUM(spend) as spend, COUNT(DISTINCT publisher_domain) as distinct_publishers, COUNT(DISTINCT creative_id) as distinct_creatives, SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions, SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions, SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions, SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1` });
     await sb.from('ccr_adv_summary').delete().eq('advertiser_domain', domain);
     results.ccr_adv_summary = await batchInsert(sb, 'ccr_adv_summary', s);
 
-    // 2. Campaign detail
-    const [c] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, creative_campaign_name, channel_name, advertiser_master_category, advertiser_second_category, transaction_method, ANY_VALUE(creative_landingpage_url) as landing_page_url, SUM(impressions) as impressions, SUM(spend) as spend, AVG(ctr) as ctr, COUNT(DISTINCT creative_id) as creative_count, COUNT(DISTINCT publisher_domain) as publisher_count, MIN(creative_first_seen_date) as first_seen, MAX(creative_last_seen_date) as last_seen FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,2,3,4,5,6,7 ORDER BY impressions DESC` });
+    // 2. Campaign detail (GROUP BY 1,3,4,5,6,7 — skip 2=country literal)
+    const [c] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, 'United States' as country, creative_campaign_name, channel_name, advertiser_master_category, advertiser_second_category, transaction_method, ANY_VALUE(creative_landingpage_url) as landing_page_url, SUM(impressions) as impressions, SUM(spend) as spend, AVG(ctr) as ctr, COUNT(DISTINCT creative_id) as creative_count, COUNT(DISTINCT publisher_domain) as publisher_count, MIN(creative_first_seen_date) as first_seen, MAX(creative_last_seen_date) as last_seen FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,3,4,5,6,7 ORDER BY impressions DESC` });
     await sb.from('ccr_campaign_channel_detail').delete().eq('advertiser_domain', domain);
     results.ccr_campaign_channel_detail = await batchInsert(sb, 'ccr_campaign_channel_detail', c.map(serializeDates));
 
-    // 3. Creative detail
-    const [cr] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, CAST(creative_id AS STRING) as creative_id, creative_campaign_name, channel_name, creative_url_supplier, creative_landingpage_url, creative_mime_type, creative_size, creative_video_duration, MIN(creative_first_seen_date) as first_seen, MAX(creative_last_seen_date) as last_seen, SUM(impressions) as impressions, SUM(spend) as spend, AVG(ctr) as ctr FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,2,3,4,5,6,7,8,9,10 ORDER BY impressions DESC` });
+    // 3. Creative detail (GROUP BY 1,3,4,5,6,7,8,9,10 — skip 2=country literal)
+    const [cr] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, 'United States' as country, CAST(creative_id AS STRING) as creative_id, creative_campaign_name, channel_name, creative_url_supplier, creative_landingpage_url, creative_mime_type, creative_size, creative_video_duration, MIN(creative_first_seen_date) as first_seen, MAX(creative_last_seen_date) as last_seen, SUM(impressions) as impressions, SUM(spend) as spend, AVG(ctr) as ctr FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,3,4,5,6,7,8,9,10 ORDER BY impressions DESC` });
     await sb.from('ccr_creative_detail').delete().eq('advertiser_domain', domain);
     results.ccr_creative_detail = await batchInsert(sb, 'ccr_creative_detail', cr.map(serializeDates));
 
-    // 4. Publisher
-    const [p] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, publisher_domain as publisher_group, transaction_method, SUM(impressions) as impressions, SUM(spend) as spend, SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions, SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions, SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions, SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,2,3,4 ORDER BY impressions DESC` });
+    // 4. Publisher (GROUP BY 1,3,4 — skip 2=country literal)
+    const [p] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, 'United States' as country, publisher_domain as publisher_group, transaction_method, SUM(impressions) as impressions, SUM(spend) as spend, SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions, SUM(CASE WHEN channel_name LIKE '%Video%' THEN impressions ELSE 0 END) as video_impressions, SUM(CASE WHEN channel_name LIKE '%Social%' THEN impressions ELSE 0 END) as social_impressions, SUM(CASE WHEN channel_name LIKE '%CTV%' THEN impressions ELSE 0 END) as ctv_impressions FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,3,4 ORDER BY impressions DESC` });
     await sb.from('ccr_publisher_channel_method').delete().eq('advertiser_domain', domain);
     results.ccr_publisher_channel_method = await batchInsert(sb, 'ccr_publisher_channel_method', p);
 
-    // 5. Trend
-    const [t2] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, month, SUM(impressions) as impressions, SUM(spend) as spend FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,2,3 ORDER BY month ASC` });
+    // 5. Trend (GROUP BY 1,3 — skip 2=country literal)
+    const [t2] = await bq.query({ query: `SELECT LOWER(advertiser_domain) as advertiser_domain, 'United States' as country, month, SUM(impressions) as impressions, SUM(spend) as spend FROM ${table} WHERE ${DATE_FILTER} ${domainFilter} GROUP BY 1,3 ORDER BY month ASC` });
     await sb.from('ccr_expenditure_trend').delete().eq('advertiser_domain', domain);
     results.ccr_expenditure_trend = await batchInsert(sb, 'ccr_expenditure_trend', t2.map(serializeDates));
 
