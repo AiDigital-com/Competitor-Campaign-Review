@@ -79,17 +79,32 @@ export async function insertTasks(
 
   await supabase.from('pipeline_tasks').insert(rows);
 
-  // Kick task-worker using DS getAppUrl for reliable URL resolution
+  // Kick task-worker with retries. From background functions, the network call
+  // sometimes fails transiently — retry to make the handoff reliable.
   const siteUrl = getAppUrl(APP_NAME, { serverUrl: process.env.URL });
-  try {
-    const res = await fetch(`${siteUrl}/.netlify/functions/task-worker`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(10_000),
-    });
-    console.log(`[pipeline] Task-worker kick: ${res.status} for ${rows.map(r => r.task_type).join(', ')}`);
-  } catch (err) {
-    console.warn(`[pipeline] Task-worker kick failed for ${rows.map(r => r.task_type).join(', ')}:`, err);
+  const taskNames = rows.map(r => r.task_type).join(', ');
+
+  const kickOnce = async (attempt: number): Promise<boolean> => {
+    try {
+      const res = await fetch(`${siteUrl}/.netlify/functions/task-worker`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+      });
+      console.log(`[pipeline] Task-worker kick attempt ${attempt}: ${res.status} for ${taskNames}`);
+      return res.ok || res.status === 202;
+    } catch (err: any) {
+      console.warn(`[pipeline] Task-worker kick attempt ${attempt} failed for ${taskNames}:`, err?.message || err);
+      return false;
+    }
+  };
+
+  // Try up to 3 times. First attempt immediate, then 1s delay, then 3s delay.
+  const delays = [0, 1000, 3000];
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+    if (await kickOnce(i + 1)) return;
   }
+  console.error(`[pipeline] All task-worker kick attempts failed for ${taskNames} — relying on poller`);
 }
 
 /**
