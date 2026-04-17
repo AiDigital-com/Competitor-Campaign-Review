@@ -155,7 +155,7 @@ function buildAnalysisContext(
 - Top Publishers:\n${fmtPubs(c.domain)}
 - Landing Pages:\n${fmtLPs(c.domain)}`).join('\n\n');
 
-  return `Competitive advertising analysis for "${brandDomain}" — 3-month rolling window.
+  return `Competitive advertising analysis for "${brandDomain}" — 1-month rolling window.
 
 ${brandBlock}
 

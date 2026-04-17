@@ -97,7 +97,7 @@ export function MobileReport({ data }: Props) {
         <KpiTile
           label="Avg CPM"
           value={avgCpm !== null ? `$${avgCpm.toFixed(2)}` : '—'}
-          description="3-month average"
+          description="1-month average"
         />
       </div>
 

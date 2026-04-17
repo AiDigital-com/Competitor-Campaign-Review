@@ -150,7 +150,7 @@ export async function getCampaignDetail(domains: string[], limit = 50): Promise<
 }
 
 /**
- * Fetch campaigns for the 3-month rolling window with fair per-domain distribution.
+ * Fetch campaigns for the 1-month rolling window with fair per-domain distribution.
  * ROW_NUMBER() PARTITION BY domain — single BQ scan, each domain gets up to @per_domain_limit rows.
  * Prevents high-impression domains from starving others.
  */
@@ -252,7 +252,7 @@ export async function getCreativeDetail(domains: string[], limit = 50): Promise<
 }
 
 /**
- * Fetch creatives for the 3-month rolling window with fair per-domain distribution.
+ * Fetch creatives for the 1-month rolling window with fair per-domain distribution.
  * ROW_NUMBER() PARTITION BY domain — single BQ scan, each domain gets up to @per_domain_limit rows.
  * Prevents high-impression domains from starving others.
  */

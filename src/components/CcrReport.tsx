@@ -136,7 +136,7 @@ export function CcrReport({ data }: Props) {
     <div className="ccr-report">
       <PageHeader
         title={`Campaign Intelligence: ${brandDomain}`}
-        subtitle={`${hasCampaigns ? competitors.length : (verifiedDomains?.length || '…')} competitors · 3-month rolling window · ${data.generatedAt ? formatDate(data.generatedAt) : 'Analyzing…'}`}
+        subtitle={`${hasCampaigns ? competitors.length : (verifiedDomains?.length || '…')} competitors · 1-month rolling window · ${data.generatedAt ? formatDate(data.generatedAt) : 'Analyzing…'}`}
         meta={<StatusBadge status={isComplete ? 'complete' : 'info'} label={isComplete ? 'Analysis Complete' : 'Analyzing…'} />}
       />
 

@@ -370,7 +370,7 @@ ${fmtCreatives(brandData)}`;
 - Top Creatives:
 ${fmtCreatives(c)}`).join('\n\n');
 
-  return `Competitive advertising analysis for "${brand}" — 3-month rolling window.
+  return `Competitive advertising analysis for "${brand}" — 1-month rolling window.
 
 ${brandBlock}
 
