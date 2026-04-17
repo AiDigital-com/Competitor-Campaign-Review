@@ -61,13 +61,24 @@ Each element: {"domain":"...","parentCompany":"...","productLine":"...","keep":t
       verified = candidateDomains.map((d: string) => ({ domain: d, parentCompany: '', productLine: '', keep: true }));
     }
 
-    // Exclude brand from competitor list — brand is classified for its productLine but isn't a competitor
+    // Build annotations first so we can use them for filtering
     const brandKey = brandDomain.toLowerCase();
-    const keptDomains = verified.filter(c => c.keep && c.domain.toLowerCase() !== brandKey).map(c => c.domain.toLowerCase());
     const annotations: Record<string, { parentCompany: string; productLine: string }> = {};
     for (const v of verified) {
       annotations[v.domain.toLowerCase()] = { parentCompany: v.parentCompany, productLine: v.productLine };
     }
+
+    // Exclude brand + any competitor with the same parent company (prevents self-comparison)
+    // e.g., if brand is coca-colacompany.com, exclude coca-cola.com (same "The Coca-Cola Company" parent)
+    const brandParent = (annotations[brandKey]?.parentCompany || '').trim().toLowerCase();
+    const keptDomains = verified
+      .filter(c => c.keep && c.domain.toLowerCase() !== brandKey)
+      .filter(c => {
+        if (!brandParent) return true;
+        const compParent = (annotations[c.domain.toLowerCase()]?.parentCompany || '').trim().toLowerCase();
+        return !compParent || compParent !== brandParent;
+      })
+      .map(c => c.domain.toLowerCase());
 
     console.log(`[verify] ${verified.length} candidates → ${keptDomains.length} kept`);
 
