@@ -1,0 +1,339 @@
+/* NM Redesign — Showcase FX Layer (stacks on Neuro FX)
+   -----------------------------------------------------
+   Activated via [data-fx="showcase"]. This is the most aggressive,
+   vivid layer: amplified ambient, more saturation, and — the main
+   event — dramatic transitions when switching variants.
+
+   Stacking: this inherits all Neuro FX rules by matching them too.
+*/
+
+/* ============================================================
+   INHERIT NEURO FX — duplicate the [data-fx="neuro"] selectors
+   with [data-fx="showcase"] so all Neuro effects apply too.
+   ============================================================ */
+
+/* 1. Aurora (amped) */
+[data-fx="showcase"] .report-main {
+  position: relative;
+  isolation: isolate;
+}
+[data-fx="showcase"] .report-main::before,
+[data-fx="showcase"] .report-main::after {
+  content: '';
+  position: absolute; inset: -20% -10% auto -10%;
+  height: 900px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.85;
+  filter: blur(70px) saturate(1.6);
+  mix-blend-mode: screen;
+}
+[data-fx="showcase"][data-theme="light"] .report-main::before,
+[data-fx="showcase"][data-theme="light"] .report-main::after {
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+[data-fx="showcase"] .report-main::before {
+  background: radial-gradient(ellipse 60% 55% at 25% 30%,
+    rgba(174, 243, 62, 0.45) 0%, rgba(174, 243, 62, 0) 60%),
+    radial-gradient(ellipse 50% 45% at 75% 20%,
+    rgba(139, 92, 246, 0.38) 0%, rgba(139, 92, 246, 0) 60%);
+  animation: nmfx-aurora-a 18s ease-in-out infinite alternate;
+}
+[data-fx="showcase"] .report-main::after {
+  background: radial-gradient(ellipse 45% 40% at 70% 50%,
+    rgba(236, 72, 153, 0.32) 0%, rgba(236, 72, 153, 0) 60%),
+    radial-gradient(ellipse 55% 45% at 15% 70%,
+    rgba(59, 130, 246, 0.34) 0%, rgba(59, 130, 246, 0) 60%);
+  animation: nmfx-aurora-b 22s ease-in-out infinite alternate;
+}
+[data-fx="showcase"] .report-main > * { position: relative; z-index: 1; }
+
+/* 2. Neural grid on heroes */
+[data-fx="showcase"] .v1-hero,
+[data-fx="showcase"] .v2-hero,
+[data-fx="showcase"] .pa-hero,
+[data-fx="showcase"] .mth-hero {
+  position: relative;
+  overflow: hidden;
+}
+[data-fx="showcase"] .v1-hero::before,
+[data-fx="showcase"] .v2-hero::before,
+[data-fx="showcase"] .pa-hero::before,
+[data-fx="showcase"] .mth-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 20% 50%, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 20% 50%, black 0%, transparent 70%);
+  animation: nmfx-grid-drift 25s linear infinite;
+  pointer-events: none;
+  opacity: 0.8;
+  z-index: 0;
+}
+[data-fx="showcase"] .v1-hero > *,
+[data-fx="showcase"] .v2-hero > *,
+[data-fx="showcase"] .pa-hero > *,
+[data-fx="showcase"] .mth-hero > * { position: relative; z-index: 1; }
+
+/* 3. Headline shimmer (faster) */
+[data-fx="showcase"] .v1-hero h1 em,
+[data-fx="showcase"] .v2-hero h1 em,
+[data-fx="showcase"] .pa-hero h1 em,
+[data-fx="showcase"] .mth-hero h1 em {
+  background: linear-gradient(
+    100deg,
+    currentColor 0%, currentColor 40%,
+    color-mix(in srgb, var(--accent) 80%, white 20%) 50%,
+    currentColor 60%, currentColor 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: nmfx-shimmer 3.5s ease-in-out infinite;
+}
+
+/* 4. Score bloom — strong in dark mode, muted in light mode (light halos on
+   light bg read as dusty smudges; we tone them way down). */
+[data-fx="showcase"] .v1-kpi-score .kpi-value,
+[data-fx="showcase"] .v2-score-widget .big,
+[data-fx="showcase"] .v3d-section-score .big {
+  text-shadow:
+    0 0 28px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 0 60px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: nmfx-bloom-strong 3s ease-in-out infinite;
+}
+@keyframes nmfx-bloom-strong {
+  0%, 100% { text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 48px color-mix(in srgb, var(--accent) 25%, transparent); }
+  50%      { text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 80px color-mix(in srgb, var(--accent) 50%, transparent); }
+}
+[data-fx="showcase"][data-theme="light"] .v1-kpi-score .kpi-value,
+[data-fx="showcase"][data-theme="light"] .v2-score-widget .big,
+[data-fx="showcase"][data-theme="light"] .v3d-section-score .big {
+  text-shadow: none;
+  animation: none;
+}
+
+/* 5. Scatter points — ambient orbit glow removed per design.
+   Entry pop (nm-pop) still comes from animations.css. */
+
+/* Scatter group highlight — applied on any FX (works with or without showcase).
+   Hovering a point adds .nm-hl-match to points sharing its color and .nm-hl-dim to
+   the rest. The dim points fade back; the matching points glow brighter. */
+.v1-scatter-pt { transition: filter 0.25s ease, opacity 0.25s ease, r 0.15s ease; }
+.v1-scatter-pt.nm-hl-match {
+  /* !important needed to beat the running nmfx-orbit animation's filter values */
+  filter: drop-shadow(0 0 14px var(--nm-hl-color, currentColor)) drop-shadow(0 0 28px var(--nm-hl-color, currentColor)) !important;
+  animation: none !important;
+}
+/* Stronger glow variant when showcase FX is active */
+[data-fx="showcase"] .v1-scatter-pt.nm-hl-match {
+  filter: drop-shadow(0 0 18px var(--nm-hl-color, currentColor)) drop-shadow(0 0 40px var(--nm-hl-color, currentColor)) !important;
+  animation: none !important;
+}
+.v1-scatter-pt.nm-hl-dim { opacity: 0.2 !important; filter: none !important; animation: none !important; }
+.v1-scatter-pt-label.nm-hl-dim { opacity: 0.2; }
+/* Pause the orbit animation on matched points so the glow sits steady */
+[data-fx="showcase"] .v1-scatter-pt.nm-hl-match { animation-play-state: paused; }
+
+/* 6. Section bar shimmer (faster, brighter) */
+[data-fx="showcase"] .v1-sec-bar {
+  position: relative;
+  overflow: hidden;
+}
+[data-fx="showcase"] .v1-sec-bar::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%, transparent 42%,
+    color-mix(in srgb, var(--accent) 90%, white) 50%,
+    transparent 58%, transparent 100%
+  );
+  background-size: 300% 100%;
+  pointer-events: none;
+  animation: nmfx-packet 2.4s linear infinite;
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+/* 7. Neon edge trace on cards — REMOVED per feedback (was distracting) */
+
+/* 8. Ticker caret */
+[data-fx="showcase"] .v1-hero-eyebrow::after,
+[data-fx="showcase"] .pa-hero .eyebrow::after,
+[data-fx="showcase"] .mth-hero .eyebrow::after {
+  content: '_';
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 700;
+  animation: nmfx-caret 1s steps(2) infinite;
+}
+
+/* 9. Fix-first rows hover */
+[data-fx="showcase"] .v1-fix-row { transition: background 0.25s ease, transform 0.25s ease; }
+[data-fx="showcase"] .v1-fix-row:hover {
+  transform: translateX(4px);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* ============================================================
+   SHOWCASE-ONLY: TAB SWITCH TRANSITIONS
+   The main event. When user clicks Cockpit/Triage/Drill,
+   the outgoing view exits with a mask-sweep + blur, the incoming
+   view enters with a staggered reveal + glitch flash.
+   ============================================================ */
+
+/* Make main column a stacking context for the transition overlay.
+   scrollbar-gutter: stable keeps the scrollbar track reserved even when
+   content momentarily doesn't overflow, so there's no flash when switching variants. */
+[data-fx="showcase"] .report-main {
+  overflow-x: clip;
+  scrollbar-gutter: stable;
+}
+
+/* EXIT animation on the currently-leaving variant */
+[data-fx="showcase"] .variant.exit-left {
+  animation: nm-sc-exit-left 420ms cubic-bezier(.55, .05, .8, .3) both;
+  pointer-events: none;
+  position: absolute; inset: 110px 0 0 0;
+  /* topbar is 110px; align exit absolute so enter can stack */
+}
+[data-fx="showcase"] .variant.exit-right {
+  animation: nm-sc-exit-right 420ms cubic-bezier(.55, .05, .8, .3) both;
+  pointer-events: none;
+  position: absolute; inset: 110px 0 0 0;
+}
+@keyframes nm-sc-exit-left {
+  0%   { opacity: 1; transform: translateX(0)    scale(1)    skewX(0);    filter: blur(0) saturate(1); }
+  60%  { opacity: 0.4; transform: translateX(-6%) scale(.97)  skewX(-3deg); filter: blur(8px)  saturate(1.6); }
+  100% { opacity: 0;   transform: translateX(-12%) scale(.94) skewX(-6deg); filter: blur(24px) saturate(2); }
+}
+@keyframes nm-sc-exit-right {
+  0%   { opacity: 1; transform: translateX(0)   scale(1)   skewX(0);    filter: blur(0) saturate(1); }
+  60%  { opacity: 0.4; transform: translateX(6%) scale(.97) skewX(3deg); filter: blur(8px)  saturate(1.6); }
+  100% { opacity: 0;   transform: translateX(12%) scale(.94) skewX(6deg); filter: blur(24px) saturate(2); }
+}
+
+/* ENTER — simple opacity fade synced behind the sweep.
+   No transforms, no filters, no staggered kpi/hero/sec animations —
+   the sweep is the transition, the new content just appears behind it. */
+[data-fx="showcase"] .variant.enter-from-left,
+[data-fx="showcase"] .variant.enter-from-right {
+  animation: nm-sc-enter-fade 320ms 80ms ease-out both;
+}
+@keyframes nm-sc-enter-fade {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* SCAN LINE that sweeps across the main column during transition
+   Dark mode: bright accent + screen blend → glowing sweep
+   Light mode: dark accent + multiply blend → inked sweep that reads on white
+*/
+[data-fx="showcase"] .report-main.nm-sc-transitioning::after {
+  content: '';
+  position: absolute;
+  top: 110px; left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 0%, transparent) 45%,
+    color-mix(in srgb, var(--accent) 55%, white 10%) 50%,
+    color-mix(in srgb, var(--accent) 0%, transparent) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  mix-blend-mode: screen;
+  animation: nm-sc-scan 620ms cubic-bezier(.4, 0, .6, 1) forwards;
+  filter: blur(1px);
+}
+[data-fx="showcase"][data-theme="light"] .report-main.nm-sc-transitioning::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 42%,
+    color-mix(in srgb, var(--accent) 70%, black 20%) 48%,
+    color-mix(in srgb, var(--accent) 90%, black 10%) 50%,
+    color-mix(in srgb, var(--accent) 70%, black 20%) 52%,
+    transparent 58%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  mix-blend-mode: multiply;
+  filter: blur(2px);
+  opacity: 0.9;
+}
+[data-fx="showcase"] .report-main.nm-sc-transitioning.dir-right::after {
+  animation: nm-sc-scan-r 620ms cubic-bezier(.4, 0, .6, 1) forwards;
+}
+@keyframes nm-sc-scan {
+  0%   { background-position: 120% 0; opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { background-position: -40% 0; opacity: 0; }
+}
+@keyframes nm-sc-scan-r {
+  0%   { background-position: -40% 0; opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { background-position: 120% 0; opacity: 0; }
+}
+
+/* Staggered kpi/hero/section enter animations — REMOVED per feedback.
+   The sweep is the whole transition; content just fades in behind it. */
+
+/* Cursor halo — REMOVED per feedback (was distracting) */
+
+/* ============================================================
+   AMBIENT: LIVE DOT — pulses faster & brighter
+   ============================================================ */
+[data-fx="showcase"] .v1-hero-eyebrow .dot {
+  animation: nm-sc-dot 1.4s ease-in-out infinite;
+  box-shadow: 0 0 12px var(--accent);
+}
+@keyframes nm-sc-dot {
+  0%, 100% { transform: scale(1);   opacity: 1;   box-shadow: 0 0 8px var(--accent); }
+  50%      { transform: scale(1.8); opacity: 0.5; box-shadow: 0 0 20px var(--accent), 0 0 40px var(--accent); }
+}
+
+/* ============================================================
+   REDUCED MOTION GUARD
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  [data-fx="showcase"] * { animation-play-state: paused !important; }
+  [data-fx="showcase"] .variant.exit-left,
+  [data-fx="showcase"] .variant.exit-right,
+  [data-fx="showcase"] .variant.enter-from-left,
+  [data-fx="showcase"] .variant.enter-from-right {
+    animation: none !important;
+    position: static !important;
+  }
+}
+
+
+/* ============================================================
+   AIO — Stronger score bloom on the primary hero stat in showcase mode.
+   Matches NM's .v1-kpi-score .kpi-value treatment.
+   ============================================================ */
+[data-fx="showcase"] .aio-hero-stat--primary .aio-hero-stat-v {
+  text-shadow:
+    0 0 28px color-mix(in srgb, currentColor 70%, transparent),
+    0 0 60px color-mix(in srgb, currentColor 35%, transparent);
+  animation: aio-bloom-strong 3s ease-in-out infinite;
+}
+@keyframes aio-bloom-strong {
+  0%, 100% { text-shadow: 0 0 24px color-mix(in srgb, currentColor 55%, transparent), 0 0 48px color-mix(in srgb, currentColor 25%, transparent); }
+  50%      { text-shadow: 0 0 40px color-mix(in srgb, currentColor 85%, transparent), 0 0 80px color-mix(in srgb, currentColor 50%, transparent); }
+}
+[data-fx="showcase"][data-theme="light"] .aio-hero-stat--primary .aio-hero-stat-v {
+  text-shadow: none;
+  animation: none;
+}

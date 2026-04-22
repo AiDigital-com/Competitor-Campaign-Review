@@ -1,0 +1,288 @@
+/* NM Redesign — Experimental Cosmetic FX Layer
+   -----------------------------------------------
+   Activated via [data-fx="neuro"] on <html>. Purely additive / ambient —
+   never blocks clicks, never reflows layout, respects prefers-reduced-motion.
+   Each effect is its own guarded block so individual ones can be commented
+   out without affecting others.
+*/
+
+@media (prefers-reduced-motion: reduce) {
+  [data-fx="neuro"] * { animation-play-state: paused !important; }
+}
+
+/* ============================================================
+   1. AURORA AMBIENT BACKGROUND
+   Slow-drifting conic gradients behind the main column, visible
+   through the variant spacing. Layered with soft blend mode.
+   ============================================================ */
+[data-fx="neuro"] .report-main {
+  position: relative;
+  isolation: isolate;
+}
+[data-fx="neuro"] .report-main::before,
+[data-fx="neuro"] .report-main::after {
+  content: '';
+  position: absolute; inset: -20% -10% auto -10%;
+  height: 720px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+  filter: blur(80px) saturate(1.3);
+  mix-blend-mode: screen;
+}
+[data-fx="neuro"][data-theme="light"] .report-main::before,
+[data-fx="neuro"][data-theme="light"] .report-main::after {
+  opacity: 0.38;
+  mix-blend-mode: multiply;
+  filter: blur(90px) saturate(1.1);
+}
+[data-fx="neuro"] .report-main::before {
+  background: radial-gradient(ellipse 60% 55% at 25% 30%,
+    rgba(174, 243, 62, 0.28) 0%,
+    rgba(174, 243, 62, 0) 60%),
+    radial-gradient(ellipse 50% 45% at 75% 20%,
+    rgba(99, 102, 241, 0.22) 0%,
+    rgba(99, 102, 241, 0) 60%);
+  animation: nmfx-aurora-a 24s ease-in-out infinite alternate;
+}
+[data-fx="neuro"] .report-main::after {
+  background: radial-gradient(ellipse 45% 40% at 70% 50%,
+    rgba(236, 72, 153, 0.18) 0%,
+    rgba(236, 72, 153, 0) 60%),
+    radial-gradient(ellipse 55% 45% at 15% 70%,
+    rgba(59, 130, 246, 0.18) 0%,
+    rgba(59, 130, 246, 0) 60%);
+  animation: nmfx-aurora-b 30s ease-in-out infinite alternate;
+}
+[data-fx="neuro"] .report-main > * { position: relative; z-index: 1; }
+
+@keyframes nmfx-aurora-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-4%, 3%, 0) scale(1.08); }
+  100% { transform: translate3d(3%, -2%, 0) scale(1.04); }
+}
+@keyframes nmfx-aurora-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1.05); }
+  50%  { transform: translate3d(5%, -3%, 0) scale(1); }
+  100% { transform: translate3d(-3%, 4%, 0) scale(1.1); }
+}
+
+/* ============================================================
+   2. NEURAL GRID — faint animated grid fabric
+   A repeating line grid under the hero that slowly slides.
+   ============================================================ */
+[data-fx="neuro"] .v1-hero,
+[data-fx="neuro"] .v2-hero,
+[data-fx="neuro"] .pa-hero,
+[data-fx="neuro"] .mth-hero {
+  position: relative;
+  overflow: hidden;
+}
+[data-fx="neuro"] .v1-hero::before,
+[data-fx="neuro"] .v2-hero::before,
+[data-fx="neuro"] .pa-hero::before,
+[data-fx="neuro"] .mth-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 20% 50%, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 20% 50%, black 0%, transparent 70%);
+  animation: nmfx-grid-drift 40s linear infinite;
+  pointer-events: none;
+  opacity: 0.55;
+  z-index: 0;
+}
+[data-fx="neuro"] .v1-hero > *,
+[data-fx="neuro"] .v2-hero > *,
+[data-fx="neuro"] .pa-hero > *,
+[data-fx="neuro"] .mth-hero > * { position: relative; z-index: 1; }
+
+@keyframes nmfx-grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 480px 0, 0 480px; }
+}
+
+/* ============================================================
+   3. HEADLINE SHIMMER — light sweep across big headlines
+   ============================================================ */
+[data-fx="neuro"] .v1-hero h1 em,
+[data-fx="neuro"] .v2-hero h1 em,
+[data-fx="neuro"] .pa-hero h1 em,
+[data-fx="neuro"] .mth-hero h1 em {
+  background: linear-gradient(
+    100deg,
+    currentColor 0%,
+    currentColor 40%,
+    color-mix(in srgb, var(--accent) 80%, white 20%) 50%,
+    currentColor 60%,
+    currentColor 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: nmfx-shimmer 5.5s ease-in-out infinite;
+}
+@keyframes nmfx-shimmer {
+  0%, 100% { background-position: 100% 0; }
+  50%      { background-position: 0% 0; }
+}
+
+/* ============================================================
+   4. SCORE NUMBER BLOOM — the big KPI number gets a
+   soft halo that pulses with the heartbeat of the report.
+   ============================================================ */
+[data-fx="neuro"] .v1-kpi-score .kpi-value,
+[data-fx="neuro"] .v2-score-widget .big,
+[data-fx="neuro"] .v3d-section-score .big {
+  position: relative;
+  text-shadow:
+    0 0 20px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 40px color-mix(in srgb, var(--accent) 20%, transparent);
+  animation: nmfx-bloom 4s ease-in-out infinite;
+}
+@keyframes nmfx-bloom {
+  0%, 100% { text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 36px color-mix(in srgb, var(--accent) 14%, transparent); }
+  50%      { text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 60px color-mix(in srgb, var(--accent) 26%, transparent); }
+}
+
+/* ============================================================
+   5. SCATTER — ambient glow + orbit removed per design.
+   ============================================================ */
+@keyframes nmfx-orbit {
+  0%, 100% { filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 35%, transparent)); }
+  50%      { filter: drop-shadow(0 0 16px color-mix(in srgb, currentColor 75%, transparent)); }
+}
+
+/* ============================================================
+   6. SECTION BAR PROGRESS SHIMMER — a light bead travels
+   through the long section bars like a data packet.
+   ============================================================ */
+[data-fx="neuro"] .v1-sec-bar {
+  position: relative;
+  overflow: hidden;
+}
+[data-fx="neuro"] .v1-sec-bar::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 45%,
+    color-mix(in srgb, var(--accent) 70%, white) 50%,
+    transparent 55%,
+    transparent 100%
+  );
+  background-size: 300% 100%;
+  pointer-events: none;
+  animation: nmfx-packet 3.8s linear infinite;
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+[data-fx="neuro"] .v1-sec:nth-child(1) .v1-sec-bar::after { animation-delay: 0s; }
+[data-fx="neuro"] .v1-sec:nth-child(2) .v1-sec-bar::after { animation-delay: 1.1s; }
+[data-fx="neuro"] .v1-sec:nth-child(3) .v1-sec-bar::after { animation-delay: 2.2s; }
+
+@keyframes nmfx-packet {
+  from { background-position: 120% 0; }
+  to   { background-position: -20% 0; }
+}
+
+/* ============================================================
+   7. CARD HOVER: NEON EDGE TRACE
+   On hover, the card border glows with a traveling gradient.
+   ============================================================ */
+[data-fx="neuro"] .pa-card,
+[data-fx="neuro"] .v1-sec,
+[data-fx="neuro"] .v2-crit-card {
+  position: relative;
+}
+[data-fx="neuro"] .pa-card::before,
+[data-fx="neuro"] .v1-sec::before,
+[data-fx="neuro"] .v2-crit-card::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--pa-color, var(--accent)) 40deg,
+    transparent 90deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  animation: nmfx-rotate 6s linear infinite;
+}
+[data-fx="neuro"] .pa-card:hover::before,
+[data-fx="neuro"] .v1-sec:hover::before,
+[data-fx="neuro"] .v2-crit-card:hover::before {
+  opacity: 0.8;
+}
+@keyframes nmfx-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   8. TICKER CURSOR — tiny blinking caret next to the
+   "ready for re-run" / timestamp strings gives a "live system" feel
+   ============================================================ */
+[data-fx="neuro"] .v1-hero-eyebrow::after,
+[data-fx="neuro"] .pa-hero .eyebrow::after,
+[data-fx="neuro"] .mth-hero .eyebrow::after {
+  content: '_';
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 700;
+  animation: nmfx-caret 1s steps(2) infinite;
+}
+@keyframes nmfx-caret {
+  50% { opacity: 0; }
+}
+
+/* ============================================================
+   9. RAIL ICON: subtle accent pulse on the active one
+   ============================================================ */
+[data-fx="neuro"] .shell-rail .icon.active {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: nmfx-rail-pulse 3s ease-out infinite;
+}
+@keyframes nmfx-rail-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+  70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+/* ============================================================
+   10. CARET / ARROW TRAILS on fix-first rows
+   Small → on hover animates to the right smoothly
+   ============================================================ */
+[data-fx="neuro"] .v1-fix-row { transition: background 0.25s ease, transform 0.25s ease; }
+[data-fx="neuro"] .v1-fix-row:hover { transform: translateX(4px); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+
+
+/* ============================================================
+   AIO — Score bloom on the primary hero stat (matches NM).
+   ============================================================ */
+[data-fx="neuro"] .aio-hero-stat--primary .aio-hero-stat-v {
+  position: relative;
+  text-shadow:
+    0 0 20px color-mix(in srgb, currentColor 45%, transparent),
+    0 0 40px color-mix(in srgb, currentColor 20%, transparent);
+  animation: aio-bloom 4s ease-in-out infinite;
+}
+@keyframes aio-bloom {
+  0%, 100% { text-shadow: 0 0 18px color-mix(in srgb, currentColor 35%, transparent), 0 0 36px color-mix(in srgb, currentColor 14%, transparent); }
+  50%      { text-shadow: 0 0 28px color-mix(in srgb, currentColor 55%, transparent), 0 0 60px color-mix(in srgb, currentColor 26%, transparent); }
+}

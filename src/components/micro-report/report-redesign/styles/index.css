@@ -1,0 +1,82 @@
+/**
+ * CCR Report redesign — stylesheet bundle.
+ *
+ * The shell (rail/sidebar/topbar/variant-base), entrance animations, and
+ * FX layers live in the DS package as a side-entry CSS bundle. We import
+ * it here so CCR gets every future shell improvement for free, then layer
+ * the CCR-specific styles on top.
+ *
+ * Order matters:
+ *  1. DS report-visual.css — shell chrome + aidl-sweep-* classes
+ *  2. 1-styles.css         — CCR primitives (host badge, mix bar, creative card, etc.)
+ *  3. 3-animations.css     — entrance keyframes (prototype-local)
+ *  4. 4-fx.css             — ambient FX (data-fx="neuro")
+ *  5. 5-fx-showcase.css    — showcase layer (stacks on neuro)
+ *  6. 6-fx-ccr.css         — CCR-local FX hooks (grid, shimmer)
+ */
+@import '@AiDigital-com/design-system/report-visual.css';
+@import './1-styles.css';
+@import './3-animations.css';
+@import './4-fx.css';
+@import './5-fx-showcase.css';
+@import './6-fx-ccr.css';
+
+/* --- Video lightbox fallback pane --- */
+.ccr-vbox-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px;
+  color: var(--text);
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.ccr-vbox-fallback p {
+  margin: 0;
+  max-width: 480px;
+  color: var(--text-muted);
+}
+.ccr-vbox-fallback .ccr-vbox-open {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-dim);
+}
+
+/* --- Benchmark row keyboard focus --- */
+.ccr-benchmark-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* --- Generic btn styles used in the V1 learn card --- */
+.ccr-learn-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font: 600 13px/1 var(--font-family);
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ccr-learn-actions .btn:hover {
+  background: var(--surface);
+  border-color: var(--accent-border);
+}
+.ccr-learn-actions .btn-primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ccr-learn-actions .btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, white 12%);
+}

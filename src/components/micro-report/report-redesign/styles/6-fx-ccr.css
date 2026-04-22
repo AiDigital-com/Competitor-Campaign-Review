@@ -1,0 +1,255 @@
+/* CCR-specific FX — mirrors NM/AIO patterns on CCR selectors.
+   Hooks into [data-fx="neuro"] and [data-fx="showcase"]. */
+
+/* =========================================================
+   NEURAL GRID on the hero card (both neuro + showcase)
+   ========================================================= */
+[data-fx="neuro"] .ccr-hero,
+[data-fx="showcase"] .ccr-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+[data-fx="neuro"] .ccr-hero::before,
+[data-fx="showcase"] .ccr-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 12%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 12%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 18% 40%, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 18% 40%, black 0%, transparent 70%);
+  animation: ccrfx-grid-drift 25s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+  z-index: 0;
+}
+[data-fx="neuro"] .ccr-hero > *,
+[data-fx="showcase"] .ccr-hero > * {
+  position: relative;
+  z-index: 1;
+}
+@keyframes ccrfx-grid-drift {
+  0%   { background-position: 0 0, 0 0; }
+  100% { background-position: 48px 48px, 48px 48px; }
+}
+
+/* =========================================================
+   HERO TITLE SHIMMER (showcase only)
+   Matches nmfx-shimmer on CCR's .ccr-hero-title
+   ========================================================= */
+[data-fx="showcase"] .ccr-hero-title {
+  background: linear-gradient(
+    100deg,
+    currentColor 0%, currentColor 40%,
+    color-mix(in srgb, var(--accent) 85%, white 15%) 50%,
+    currentColor 60%, currentColor 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: ccrfx-shimmer 3.6s ease-in-out infinite;
+}
+@keyframes ccrfx-shimmer {
+  0%, 100% { background-position: 120% 0; }
+  50%      { background-position: -20% 0; }
+}
+[data-fx="showcase"][data-theme="light"] .ccr-hero-title {
+  animation-duration: 5s;
+}
+
+/* =========================================================
+   KPI VALUE BLOOM — on the primary measured-spend tile
+   ========================================================= */
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:first-child .ccr-kpi-value {
+  color: var(--accent);
+  text-shadow:
+    0 0 28px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 0 60px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: ccrfx-bloom 3s ease-in-out infinite;
+}
+@keyframes ccrfx-bloom {
+  0%, 100% { text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 48px color-mix(in srgb, var(--accent) 25%, transparent); }
+  50%      { text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 80px color-mix(in srgb, var(--accent) 50%, transparent); }
+}
+[data-fx="showcase"][data-theme="light"] .ccr-hero-kpis .ccr-kpi:first-child .ccr-kpi-value {
+  text-shadow: none;
+  animation: none;
+}
+
+/* =========================================================
+   RANK BADGE — subtle ambient pulse
+   ========================================================= */
+[data-fx="showcase"] .ccr-kpi-rank {
+  color: var(--accent);
+  text-shadow:
+    0 0 20px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* =========================================================
+   EYEBROW CARET — blinking cursor after eyebrow text
+   ========================================================= */
+[data-fx="showcase"] .ccr-hero-lead > .ccr-eyebrow::after {
+  content: '_';
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 700;
+  animation: ccrfx-caret 1s steps(2) infinite;
+}
+@keyframes ccrfx-caret {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* =========================================================
+   HERO FUNNEL — packet shimmer on the impressions bar (showcase)
+   ========================================================= */
+[data-fx="showcase"] .ccr-funnel-rail {
+  position: relative;
+  overflow: hidden;
+}
+[data-fx="showcase"] .ccr-funnel-rail::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%, transparent 40%,
+    color-mix(in srgb, var(--accent) 70%, white) 50%,
+    transparent 60%, transparent 100%
+  );
+  background-size: 250% 100%;
+  pointer-events: none;
+  animation: ccrfx-packet 3s linear infinite;
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+@keyframes ccrfx-packet {
+  0%   { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+
+/* CTR callout — bloom */
+[data-fx="showcase"] .ccr-funnel-value--hl {
+  text-shadow:
+    0 0 20px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 44px color-mix(in srgb, var(--accent) 30%, transparent);
+  animation: ccrfx-ctr-pulse 3.5s ease-in-out infinite;
+}
+@keyframes ccrfx-ctr-pulse {
+  0%, 100% { text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 32px color-mix(in srgb, var(--accent) 20%, transparent); }
+  50%      { text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 80%, transparent), 0 0 60px color-mix(in srgb, var(--accent) 40%, transparent); }
+}
+[data-fx="showcase"][data-theme="light"] .ccr-funnel-value--hl {
+  text-shadow: none;
+  animation: none;
+}
+
+/* =========================================================
+   BENCHMARK ROW — glow on brand row when showcase active
+   ========================================================= */
+[data-fx="showcase"] .ccr-benchmark-row.is-brand {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 0 24px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* =========================================================
+   CREATIVE CARD HOVER — lift + glow (showcase)
+   ========================================================= */
+[data-fx="showcase"] .ccr-creative-card {
+  transition: transform 0.25s cubic-bezier(.2,.8,.2,1), box-shadow 0.25s ease;
+}
+[data-fx="showcase"] .ccr-creative-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--accent) 18%, rgba(0,0,0,0.4));
+}
+[data-fx="showcase"] .ccr-creative-card.is-brand:hover {
+  box-shadow:
+    0 16px 40px color-mix(in srgb, var(--accent) 30%, rgba(0,0,0,0.5)),
+    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* =========================================================
+   SECTION HEADLINES — accent glow on showcase
+   ========================================================= */
+[data-fx="showcase"] .ccr-section-head h2 {
+  position: relative;
+}
+[data-fx="showcase"] .ccr-section-head h2::before {
+  content: '';
+  position: absolute;
+  left: -14px; top: 50%;
+  transform: translateY(-50%);
+  width: 4px; height: 80%;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 16px var(--accent);
+  animation: ccrfx-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ccrfx-pulse {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 8px var(--accent); }
+  50%      { opacity: 1;   box-shadow: 0 0 16px var(--accent), 0 0 28px var(--accent); }
+}
+[data-fx="showcase"][data-theme="light"] .ccr-section-head h2::before {
+  box-shadow: none;
+  animation: none;
+  opacity: 1;
+}
+
+/* =========================================================
+   HOST BADGE LIVE DOT — subtle pulse on the brand's badge
+   ========================================================= */
+[data-fx="showcase"] .ccr-host-badge.is-brand .ccr-host-mark {
+  animation: ccrfx-host-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ccrfx-host-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+/* =========================================================
+   STAGGERED REVEAL on first load — hero kpis fade up
+   ========================================================= */
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi {
+  animation: ccrfx-rise 520ms cubic-bezier(.2, .8, .2, 1) both;
+}
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:nth-child(1) { animation-delay: 60ms; }
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:nth-child(2) { animation-delay: 140ms; }
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:nth-child(3) { animation-delay: 220ms; }
+[data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:nth-child(4) { animation-delay: 300ms; }
+@keyframes ccrfx-rise {
+  0%   { opacity: 0; transform: translateY(14px); filter: blur(6px); }
+  100% { opacity: 1; transform: translateY(0);    filter: blur(0);   }
+}
+
+[data-fx="showcase"] .ccr-funnelc-stat,
+[data-fx="showcase"] .ccr-funnelc-arrow {
+  animation: ccrfx-rise 520ms cubic-bezier(.2, .8, .2, 1) both;
+}
+[data-fx="showcase"] .ccr-funnelc-stat:nth-child(1) { animation-delay: 340ms; }
+[data-fx="showcase"] .ccr-funnelc-arrow:nth-child(2) { animation-delay: 380ms; }
+[data-fx="showcase"] .ccr-funnelc-stat:nth-child(3) { animation-delay: 420ms; }
+[data-fx="showcase"] .ccr-funnelc-arrow:nth-child(4) { animation-delay: 460ms; }
+[data-fx="showcase"] .ccr-funnelc-stat:nth-child(5) { animation-delay: 500ms; }
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  [data-fx="showcase"] .ccr-hero::before,
+  [data-fx="neuro"] .ccr-hero::before,
+  [data-fx="showcase"] .ccr-hero-title,
+  [data-fx="showcase"] .ccr-hero-kpis .ccr-kpi:first-child .ccr-kpi-value,
+  [data-fx="showcase"] .ccr-hero-kpis .ccr-kpi,
+  [data-fx="showcase"] .ccr-funnel-step,
+  [data-fx="showcase"] .ccr-brand-activity-row,
+  [data-fx="showcase"] .ccr-funnel-rail::after,
+  [data-fx="showcase"] .ccr-funnel-value--hl,
+  [data-fx="showcase"] .ccr-section-head h2::before,
+  [data-fx="showcase"] .ccr-hero-lead > .ccr-eyebrow::after {
+    animation: none !important;
+  }
+}

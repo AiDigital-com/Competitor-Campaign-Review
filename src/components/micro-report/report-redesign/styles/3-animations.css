@@ -1,0 +1,257 @@
+/* NM Redesign — tasteful entrance animations
+   -----------------------------------------
+   Modern best practices:
+   - Respect prefers-reduced-motion
+   - GPU-only props (transform, opacity)
+   - Short durations (220–480ms), gentle easing
+   - Staggered via nth-child on meaningful groups
+   - animation-fill-mode: both so no FOUC
+*/
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.001s !important;
+  }
+}
+
+/* ============ keyframes ============ */
+@keyframes nm-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nm-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes nm-pop {
+  0%   { opacity: 0; transform: scale(0.82); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes nm-scatter-pt-in {
+  0%   { opacity: 0; transform: scale(0) translateZ(0); transform-origin: center; transform-box: fill-box; }
+  100% { opacity: 1; transform: scale(1) translateZ(0); transform-box: fill-box; }
+}
+@keyframes nm-bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes nm-spark-fill {
+  from { opacity: 0; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+@keyframes nm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(174,243,62,0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(174,243,62,0); }
+}
+@keyframes nm-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.6; }
+}
+
+/* Live dot on hero eyebrow */
+.v1-hero-eyebrow .dot {
+  animation: nm-dot-pulse 2.2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Hero block entrance */
+.variant.active .v1-hero,
+.variant.active .v2-hero {
+  animation: nm-rise 460ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v1-hero h1 em {
+  animation: nm-fade 700ms 200ms ease both;
+}
+
+/* KPI cards staggered */
+.variant.active .v1-kpi {
+  animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v1-kpi:nth-child(1) { animation-delay: 60ms; }
+.variant.active .v1-kpi:nth-child(2) { animation-delay: 120ms; }
+.variant.active .v1-kpi:nth-child(3) { animation-delay: 180ms; }
+.variant.active .v1-kpi:nth-child(4) { animation-delay: 240ms; }
+
+/* Score spark bars fill in one by one */
+.v1-kpi-score .kpi-sparkbar div {
+  transform-origin: bottom;
+  animation: nm-spark-fill 320ms ease both;
+}
+.v1-kpi-score .kpi-sparkbar div:nth-child(1)  { animation-delay: 260ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(2)  { animation-delay: 300ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(3)  { animation-delay: 340ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(4)  { animation-delay: 380ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(5)  { animation-delay: 420ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(6)  { animation-delay: 460ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(7)  { animation-delay: 500ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(8)  { animation-delay: 540ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(9)  { animation-delay: 580ms; }
+.v1-kpi-score .kpi-sparkbar div:nth-child(10) { animation-delay: 620ms; }
+
+/* Section cards stagger */
+.variant.active .v1-sec {
+  animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v1-sec:nth-child(1) { animation-delay: 300ms; }
+.variant.active .v1-sec:nth-child(2) { animation-delay: 360ms; }
+.variant.active .v1-sec:nth-child(3) { animation-delay: 420ms; }
+
+/* Section bar grow */
+.v1-sec-bar > div {
+  transform-origin: left;
+  animation: nm-bar-grow 900ms 480ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+/* Fix-first rows stagger */
+.variant.active .v1-fix-row {
+  animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v1-fix-row:nth-child(1) { animation-delay: 500ms; }
+.variant.active .v1-fix-row:nth-child(2) { animation-delay: 560ms; }
+.variant.active .v1-fix-row:nth-child(3) { animation-delay: 620ms; }
+.variant.active .v1-fix-row:nth-child(4) { animation-delay: 680ms; }
+.variant.active .v1-fix-row:nth-child(5) { animation-delay: 740ms; }
+
+/* Scatter scaffolding + points */
+.variant.active .v1-scatter-wrap {
+  animation: nm-rise 480ms 600ms cubic-bezier(.2,.7,.2,1) both;
+}
+.v1-scatter-pt {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: nm-pop 440ms cubic-bezier(.3,1.4,.5,1) both;
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+.v1-scatter-pt:hover { transform: scale(1.18); filter: brightness(1.1); cursor: pointer; }
+/* Scatter point stagger */
+.v1-scatter g:nth-of-type(1)  .v1-scatter-pt { animation-delay: 860ms; }
+.v1-scatter g:nth-of-type(2)  .v1-scatter-pt { animation-delay: 920ms; }
+.v1-scatter g:nth-of-type(3)  .v1-scatter-pt { animation-delay: 980ms; }
+.v1-scatter g:nth-of-type(4)  .v1-scatter-pt { animation-delay: 1040ms; }
+.v1-scatter g:nth-of-type(5)  .v1-scatter-pt { animation-delay: 1100ms; }
+.v1-scatter g:nth-of-type(6)  .v1-scatter-pt { animation-delay: 1160ms; }
+.v1-scatter g:nth-of-type(7)  .v1-scatter-pt { animation-delay: 1220ms; }
+.v1-scatter g:nth-of-type(8)  .v1-scatter-pt { animation-delay: 1280ms; }
+.v1-scatter g:nth-of-type(9)  .v1-scatter-pt { animation-delay: 1340ms; }
+.v1-scatter g:nth-of-type(10) .v1-scatter-pt { animation-delay: 1400ms; }
+
+/* V2 triage — bands rise in */
+.variant.active .v2-band {
+  animation: nm-rise 440ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v2-band:nth-of-type(2) { animation-delay: 120ms; }
+.variant.active .v2-band:nth-of-type(3) { animation-delay: 200ms; }
+.variant.active .v2-band:nth-of-type(4) { animation-delay: 280ms; }
+.variant.active .v2-band:nth-of-type(5) { animation-delay: 360ms; }
+
+.variant.active .v2-crit-card {
+  animation: nm-rise 380ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v2-crit-card:nth-child(1) { animation-delay: 200ms; }
+.variant.active .v2-crit-card:nth-child(2) { animation-delay: 260ms; }
+.variant.active .v2-crit-card:nth-child(3) { animation-delay: 320ms; }
+.variant.active .v2-crit-card:nth-child(4) { animation-delay: 380ms; }
+.variant.active .v2-crit-card:nth-child(5) { animation-delay: 440ms; }
+.variant.active .v2-crit-card:nth-child(n+6) { animation-delay: 500ms; }
+
+/* V3 drill — tabs + KPIs + findings */
+.variant.active .v3d-tab {
+  animation: nm-rise 300ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v3d-tab:nth-child(1) { animation-delay: 20ms; }
+.variant.active .v3d-tab:nth-child(2) { animation-delay: 60ms; }
+.variant.active .v3d-tab:nth-child(3) { animation-delay: 100ms; }
+.variant.active .v3d-tab:nth-child(4) { animation-delay: 140ms; }
+.variant.active .v3d-tab:nth-child(5) { animation-delay: 180ms; }
+.variant.active .v3d-tab:nth-child(6) { animation-delay: 220ms; }
+.variant.active .v3d-tab:nth-child(7) { animation-delay: 260ms; }
+
+.variant.active .v3d-section-head { animation: nm-rise 420ms 120ms cubic-bezier(.2,.7,.2,1) both; }
+.variant.active .v3d-kpi {
+  animation: nm-pop 420ms cubic-bezier(.3,1.4,.5,1) both;
+}
+.variant.active .v3d-kpi:nth-child(1) { animation-delay: 260ms; }
+.variant.active .v3d-kpi:nth-child(2) { animation-delay: 320ms; }
+.variant.active .v3d-kpi:nth-child(3) { animation-delay: 380ms; }
+.variant.active .v3d-kpi:nth-child(4) { animation-delay: 440ms; }
+.variant.active .v3d-kpi:nth-child(5) { animation-delay: 500ms; }
+
+.variant.active .v3d-finding {
+  animation: nm-rise 360ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .v3d-finding:nth-child(1) { animation-delay: 480ms; }
+.variant.active .v3d-finding:nth-child(2) { animation-delay: 540ms; }
+.variant.active .v3d-finding:nth-child(3) { animation-delay: 600ms; }
+.variant.active .v3d-finding:nth-child(4) { animation-delay: 660ms; }
+.variant.active .v3d-finding:nth-child(5) { animation-delay: 720ms; }
+.variant.active .v3d-finding:nth-child(n+6) { animation-delay: 780ms; }
+
+/* Sidebar: subtle fade on mount */
+.rs-head { animation: nm-fade 400ms ease both; }
+.rs-item { transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease; }
+.rs-item:hover { transform: translateX(2px); }
+
+/* Topbar buttons: smoother hover */
+.btn { transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.15s ease; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+/* Score numbers: count-up effect via CSS is fragile, leave as-is.
+   But give the big score a subtle glow pulse on first paint. */
+.v1-kpi-score .kpi-value,
+.v2-score-widget .big,
+.v3d-section-score .big {
+  animation: nm-fade 640ms 200ms ease both;
+}
+
+/* Priority Actions view hero */
+.variant.active .pa-hero { animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both; }
+.variant.active .pa-card {
+  animation: nm-rise 380ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .pa-card:nth-child(1) { animation-delay: 120ms; }
+.variant.active .pa-card:nth-child(2) { animation-delay: 180ms; }
+.variant.active .pa-card:nth-child(3) { animation-delay: 240ms; }
+.variant.active .pa-card:nth-child(4) { animation-delay: 300ms; }
+.variant.active .pa-card:nth-child(5) { animation-delay: 360ms; }
+.variant.active .pa-card:nth-child(6) { animation-delay: 420ms; }
+.variant.active .pa-card:nth-child(n+7) { animation-delay: 480ms; }
+
+/* Methodology page */
+.variant.active .mth-hero { animation: nm-rise 480ms cubic-bezier(.2,.7,.2,1) both; }
+.variant.active .mth-step {
+  animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .mth-step:nth-child(1) { animation-delay: 120ms; }
+.variant.active .mth-step:nth-child(2) { animation-delay: 220ms; }
+.variant.active .mth-step:nth-child(3) { animation-delay: 320ms; }
+.variant.active .mth-step:nth-child(4) { animation-delay: 420ms; }
+.variant.active .mth-step:nth-child(5) { animation-delay: 520ms; }
+.variant.active .mth-pillar {
+  animation: nm-rise 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+.variant.active .mth-pillar:nth-child(1) { animation-delay: 180ms; }
+.variant.active .mth-pillar:nth-child(2) { animation-delay: 260ms; }
+.variant.active .mth-pillar:nth-child(3) { animation-delay: 340ms; }
+.variant.active .mth-pillar:nth-child(4) { animation-delay: 420ms; }
+.variant.active .mth-pillar:nth-child(5) { animation-delay: 500ms; }
+.variant.active .mth-pillar:nth-child(6) { animation-delay: 580ms; }
+.variant.active .mth-pillar:nth-child(7) { animation-delay: 660ms; }
+
+/* Severity legend dots: gentle drift for criticals to signal urgency */
+.v2-band--critical .crit-id {
+  animation: nm-pulse 2.4s ease-in-out infinite;
+  border-radius: 999px;
+}
+
+/* Cards lift on hover */
+.v1-sec, .v1-kpi, .v2-crit-card, .v3d-finding, .pa-card {
+  transition: transform 0.22s cubic-bezier(.2,.7,.2,1), border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.v1-sec:hover, .v2-crit-card:hover, .v3d-finding:hover, .pa-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-border);
+}
