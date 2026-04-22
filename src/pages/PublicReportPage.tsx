@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { downloadVisualPDF } from '@AiDigital-com/design-system/utils';
-import { CcrReport } from '../components/CcrReport';
+import { MicroReport } from '../components/micro-report/MicroReport';
 import type { CcrReportData } from '../lib/types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -15,6 +15,7 @@ export function PublicReportPage() {
   const token = window.location.pathname.replace(/^\/r\//, '').split('/')[0];
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [reportData, setReportData] = useState<CcrReportData | null>(null);
+  const [brandDomain, setBrandDomain] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState('');
   const autoPdfTriggered = useRef(false);
 
@@ -35,7 +36,9 @@ export function PublicReportPage() {
           setState('error');
           return;
         }
-        setReportData(data.report_data as CcrReportData);
+        const rd = data.report_data as CcrReportData;
+        setReportData(rd);
+        setBrandDomain(rd.brand?.domain || '');
         setState('ready');
       });
   }, [token]);
@@ -47,13 +50,13 @@ export function PublicReportPage() {
       autoPdfTriggered.current = true;
       setTimeout(async () => {
         try {
-          await downloadVisualPDF('.ccr-report', 'Competitor Campaign Review');
+          await downloadVisualPDF('.report-main', brandDomain || 'Competitor Campaign Review');
         } catch (e) {
           console.error('Auto PDF failed:', e);
         }
       }, 2000);
     }
-  }, [state]);
+  }, [state, brandDomain]);
 
   // Add pdf-mode class for PDFShift rendering
   useEffect(() => {
@@ -93,11 +96,17 @@ export function PublicReportPage() {
     );
   }
 
+  const isPrintMode = new URLSearchParams(window.location.search).get('pdf-mode') === '1';
+
   if (reportData) {
     return (
-      <div className="ccr-report-wrapper">
-        <CcrReport data={reportData} />
-      </div>
+      <MicroReport
+        data={reportData}
+        jobId={token}
+        isPublic
+        isPrintMode={isPrintMode}
+        downloadTitle={brandDomain || 'Competitor Campaign Review'}
+      />
     );
   }
 

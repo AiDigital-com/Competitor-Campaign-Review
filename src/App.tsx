@@ -6,7 +6,7 @@
  * 2. Orchestrator identifies the brand domain and dispatches.
  * 3. ccr-pipeline-background runs (DataForSeo → BigQuery → Firecrawl → LLM).
  * 4. Frontend watches job_status via useJobStatus (Realtime).
- * 5. On complete, CcrReport renders the side-by-side comparison.
+ * 5. On complete, MicroReport renders the 6-variant redesign.
  */
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react'
 import {
@@ -14,8 +14,6 @@ import {
   ChatPanel,
   Sidebar,
   UploadZone,
-  ConnectedShareBar,
-  DownloadBar,
   useOrchestrator,
   useFileUpload,
   useJobStatus,
@@ -24,7 +22,7 @@ import {
 import type { SupabaseClient, SidebarItem } from '@AiDigital-com/design-system'
 import { createClient } from '@supabase/supabase-js'
 import { SignIn, UserButton, useAuth } from '@clerk/react'
-import { CcrReport } from './components/CcrReport'
+import { MicroReport } from './components/micro-report/MicroReport'
 import type { CcrReportData, CcrIntake } from './lib/types'
 import './App.css'
 
@@ -363,27 +361,15 @@ function AppContent({
 
       {/* Progressive report: renders as soon as any data arrives */}
       {dispatched && (
-        <div className="ccr-report-page">
-          <div className="ccr-report-bar">
-            {reportData?.narrative && (
-              <DownloadBar
-                reportText={reportData.narrative || ''}
-                title={`CCR — ${reportData.brand?.domain || 'Report'}`}
-                visualSelector=".ccr-report"
-              />
-            )}
-            {supabase && activeSessionId && reportData?.phase === 'complete' && (
-              <ConnectedShareBar
-                jobId={activeSessionId}
-                supabase={supabase}
-                tableName={SESSION_TABLE}
-              />
-            )}
-          </div>
-          <div className="ccr-report-wrapper">
-            <CcrReport data={reportData || {}} />
-          </div>
-        </div>
+        <MicroReport
+          data={(reportData || {}) as CcrReportData}
+          jobId={activeSessionId ?? ''}
+          supabase={supabase}
+          isEmbedded
+          onNewScan={() => handlersRef.current.onNew()}
+          reportText={reportData?.narrative || ''}
+          downloadTitle={reportData?.brand?.domain || 'Competitor Campaign Review'}
+        />
       )}
     </>
   )

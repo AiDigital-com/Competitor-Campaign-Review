@@ -94,7 +94,12 @@ export function App({
     [setFocusDomain, setVariant],
   );
 
-  const isActive = (v: Variant) => variant === v || exitingVariant === v;
+  // In print mode, render every variant stacked — matches NM/AIO print
+  // behavior. Filter state in V2 (CreativeLibrary) is inherited from
+  // localStorage; we accept whatever the viewer last set since per-advertiser
+  // unroll lives in a follow-up.
+  const isActive = (v: Variant) =>
+    mode === 'print' ? true : variant === v || exitingVariant === v;
 
   const brandLabel = data.brand?.parentCompany || data.overall.brandHost || 'Brand';
 
