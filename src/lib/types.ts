@@ -21,15 +21,20 @@ export interface CreativeData {
   mimeType: string;
   channelName: string;
   firstSeen: string;
+  lastSeen?: string;
   impressions?: number;
   spend?: number;
   campaignName?: string;
+  /** Impression-weighted CTR in percent (0.5 = 0.5%). Null when no click signal (CTV). */
+  ctr?: number | null;
 }
 
 export interface CampaignData {
   domain: string;
   totalImpressions: number;
   totalSpend: number;
+  /** Domain-level impression-weighted CTR in percent. Null when no click signal. */
+  ctr?: number | null;
   channels: ChannelData[];
   publishers: PublisherData[];
   creatives: CreativeData[];

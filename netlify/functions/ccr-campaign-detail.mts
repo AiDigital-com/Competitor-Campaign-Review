@@ -148,9 +148,11 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
         mimeType: c.creative_mime_type || '',
         channelName: c.channel_name || '',
         firstSeen: c.first_seen || '',
+        lastSeen: c.last_seen || '',
         impressions: Number(c.impressions) || 0,
         spend: Number(c.spend) || 0,
         campaignName: c.creative_campaign_name || '',
+        ctr: c.ctr == null ? null : Number(c.ctr),
       }));
 
       // If no filter (brand itself, or LLM didn't run), use summary-level data
@@ -158,6 +160,7 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
         const imp = Number(summary?.impressions) || 0;
         const spend = Number(summary?.spend) || 0;
         const total = imp || 1;
+        const summaryCtr = summary?.ctr == null ? null : Number(summary.ctr);
         const channels: CampaignData['channels'] = [];
         if (summary) {
           const chMap: Record<string, number> = {
@@ -171,13 +174,25 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
           }
           channels.sort((a, b) => b.impressions - a.impressions);
         }
-        return { domain, totalImpressions: imp, totalSpend: spend, channels, publishers: [], creatives: domainCreatives };
+        return { domain, totalImpressions: imp, totalSpend: spend, ctr: summaryCtr, channels, publishers: [], creatives: domainCreatives };
       }
 
       // Filter campaigns to relevant ones and recalculate metrics
       const keptCampaigns = domainCampaigns.filter(c => relevant.has(c.creative_campaign_name));
       const totalImpressions = keptCampaigns.reduce((s, c) => s + (Number(c.impressions) || 0), 0);
       const totalSpend = keptCampaigns.reduce((s, c) => s + (Number(c.spend) || 0), 0);
+
+      // Impression-weighted CTR across kept campaigns (null when no click signal).
+      let weightedNumerator = 0;
+      let weightedDenominator = 0;
+      for (const c of keptCampaigns) {
+        const ctr = c.ctr;
+        if (ctr == null) continue;
+        const i = Number(c.impressions) || 0;
+        weightedNumerator += i * Number(ctr);
+        weightedDenominator += i;
+      }
+      const filteredCtr = weightedDenominator > 0 ? weightedNumerator / weightedDenominator : null;
 
       // Rebuild channel breakdown from filtered campaigns
       const channelMap = new Map<string, { impressions: number; spend: number }>();
@@ -195,7 +210,7 @@ Be strict — only keep campaigns that are genuinely competing for the same cust
 
       // Creatives already filtered by campaign name in BQ query (Gate A)
       return {
-        domain, totalImpressions, totalSpend, channels,
+        domain, totalImpressions, totalSpend, ctr: filteredCtr, channels,
         publishers: [],
         creatives: domainCreatives,
       };

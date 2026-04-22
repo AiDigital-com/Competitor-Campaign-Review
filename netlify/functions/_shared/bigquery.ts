@@ -83,6 +83,8 @@ export async function getAdSummary(domains: string[]): Promise<any[]> {
           LOWER(advertiser_domain) as advertiser_domain,
           SUM(impressions) as impressions,
           SUM(spend) as spend,
+          -- Impression-weighted CTR (percentage number; null when no click signal, e.g. all-CTV).
+          SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr,
           COUNT(DISTINCT publisher_domain) as distinct_publishers,
           COUNT(DISTINCT creative_id) as distinct_creatives,
           SUM(CASE WHEN channel_name LIKE '%Display%' THEN impressions ELSE 0 END) as display_impressions,
@@ -122,6 +124,7 @@ export async function getCampaignDetail(domains: string[], limit = 50): Promise<
           transaction_method,
           ANY_VALUE(creative_landingpage_url) as landing_page_url,
           SUM(impressions) as impressions, SUM(spend) as spend,
+          SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr,
           COUNT(DISTINCT creative_id) as creative_count,
           COUNT(DISTINCT publisher_domain) as publisher_count,
           MIN(creative_first_seen_date) as first_seen,
@@ -169,6 +172,7 @@ export async function getCampaignDetailFull(domains: string[], perDomainLimit = 
             transaction_method,
             ANY_VALUE(creative_landingpage_url) as landing_page_url,
             SUM(impressions) as impressions, SUM(spend) as spend,
+            SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr,
             COUNT(DISTINCT creative_id) as creative_count,
             COUNT(DISTINCT publisher_domain) as publisher_count,
             MIN(creative_first_seen_date) as first_seen,
@@ -227,7 +231,8 @@ export async function getCreativeDetail(domains: string[], limit = 50): Promise<
           creative_mime_type, creative_size, creative_video_duration,
           MIN(creative_first_seen_date) as first_seen,
           MAX(creative_last_seen_date) as last_seen,
-          SUM(impressions) as impressions, SUM(spend) as spend
+          SUM(impressions) as impressions, SUM(spend) as spend,
+          SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr
         FROM ${rawTable()}
         WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
         GROUP BY 1,2,3,4,5,6,7,8,9
@@ -272,7 +277,8 @@ export async function getCreativeDetailFull(domains: string[], perDomainLimit = 
             creative_mime_type, creative_size, creative_video_duration,
             MIN(creative_first_seen_date) as first_seen,
             MAX(creative_last_seen_date) as last_seen,
-            SUM(impressions) as impressions, SUM(spend) as spend
+            SUM(impressions) as impressions, SUM(spend) as spend,
+            SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr
           FROM ${rawTable()}
           WHERE LOWER(advertiser_domain) IN UNNEST(@domains) AND ${DATE_FILTER}
           GROUP BY 1,2,3,4,5,6,7,8,9
@@ -344,7 +350,8 @@ export async function getCreativesForCampaigns(
             creative_mime_type, creative_size, creative_video_duration,
             MIN(creative_first_seen_date) as first_seen,
             MAX(creative_last_seen_date) as last_seen,
-            SUM(impressions) as impressions, SUM(spend) as spend
+            SUM(impressions) as impressions, SUM(spend) as spend,
+            SAFE_DIVIDE(SUM(impressions * ctr), NULLIF(SUM(impressions), 0)) as ctr
           FROM ${rawTable()}
           WHERE LOWER(advertiser_domain) IN UNNEST(@domains)
             AND ${DATE_FILTER}
@@ -594,15 +601,20 @@ export async function getAdClarityData(domains: string[]): Promise<CampaignData[
       mimeType: c.creative_mime_type || '',
       channelName: c.channel_name || '',
       firstSeen: c.first_seen || '',
+      lastSeen: c.last_seen || '',
       impressions: Number(c.impressions) || 0,
       spend: Number(c.spend) || 0,
       campaignName: c.creative_campaign_name || '',
+      ctr: c.ctr == null ? null : Number(c.ctr),
     }));
+
+    const domainCtr = s.ctr == null ? null : Number(s.ctr);
 
     return {
       domain,
       totalImpressions: imp,
       totalSpend: spend,
+      ctr: domainCtr,
       channels,
       publishers: domainPubs,
       creatives: domainCreatives,
