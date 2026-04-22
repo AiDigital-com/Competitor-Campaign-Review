@@ -19,21 +19,46 @@ function CreativeThumb({ creative, size = 'md' }: { creative: DecoratedCreative;
     .split('')
     .reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
   const isVideo = creative.type === 'video';
-  const hasPoster = !!creative.poster;
-  const [imgErrored, setImgErrored] = useState(false);
-  const posterVisible = hasPoster && !imgErrored;
+  const isImage = creative.type === 'image';
+  const imagePoster = isImage ? (creative.poster || creative.url || null) : creative.poster;
+  const [mediaErrored, setMediaErrored] = useState(false);
+  const showImage = isImage && imagePoster && !mediaErrored;
+  const showVideoFrame = isVideo && creative.url && !mediaErrored;
+  const hasMedia = showImage || showVideoFrame;
+
   return (
     <div
-      className={`ccr-thumb size-${size} type-${creative.type} ${posterVisible ? 'has-poster' : 'no-poster'}`}
+      className={`ccr-thumb size-${size} type-${creative.type} ${hasMedia ? 'has-poster' : 'no-poster'}`}
       style={{ '--hue': hue, '--seed': seed } as React.CSSProperties}
     >
       <div className="ccr-thumb-gradient" />
-      {hasPoster && !imgErrored && (
+      {showImage && (
         <img
           loading="lazy"
-          src={creative.poster || ''}
+          src={imagePoster || ''}
           alt=""
-          onError={() => setImgErrored(true)}
+          onError={() => setMediaErrored(true)}
+        />
+      )}
+      {showVideoFrame && (
+        // preload="metadata" + no autoplay → browser renders first frame as
+        // an implicit poster. muted + playsInline keeps mobile quiet.
+        // crossOrigin="anonymous" avoids tainting when AdClarity CDN sets CORS.
+        <video
+          className="ccr-thumb-video"
+          src={creative.url}
+          preload="metadata"
+          muted
+          playsInline
+          crossOrigin="anonymous"
+          // Advance one frame so Safari / mobile show a visible poster instead of black
+          // (AdClarity MP4s don't embed a poster frame).
+          // eslint-disable-next-line react/no-unknown-property
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            try { v.currentTime = Math.min(0.1, v.duration || 0.1); } catch { /* noop */ }
+          }}
+          onError={() => setMediaErrored(true)}
         />
       )}
       <div className="ccr-thumb-overlay" />

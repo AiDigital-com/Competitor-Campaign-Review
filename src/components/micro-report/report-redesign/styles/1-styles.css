@@ -516,11 +516,14 @@ html[data-theme="light"] .ccr-thumb-gradient {
     radial-gradient(circle at 80% 70%, hsl(calc(var(--hue) + 40) 70% 72% / 0.5), transparent 60%),
     linear-gradient(135deg, hsl(var(--hue) 50% 92%) 0%, hsl(calc(var(--hue) + 30) 45% 88%) 100%);
 }
-.ccr-thumb img {
+.ccr-thumb img,
+.ccr-thumb-video {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover;
   z-index: 2;
+  pointer-events: none;
 }
+.ccr-thumb-video { background: transparent; }
 .ccr-thumb-overlay {
   position: absolute; inset: 0; z-index: 3;
   background: linear-gradient(180deg, transparent 65%, rgba(0,0,0,0.45) 100%);
