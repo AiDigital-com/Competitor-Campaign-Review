@@ -120,7 +120,10 @@ export function App({
   // whatever data exists at snapshot time, even if partial).
   const isPrint = mode === 'print';
   const loading = {
-    v1: !isPrint && (!data.brand || data.benchmarkRows.length === 0),
+    // v1 renders as soon as the brand domain is verified. Internal
+    // per-block shields in Cockpit light up each slice (benchmark, funnel,
+    // creatives, worth-studying) independently as its Lambda lands.
+    v1: !isPrint && !data.brand,
     v2: !isPrint && data.allCampaigns.length === 0,
     v3: !isPrint && data.allCampaigns.length === 0,
     v4:

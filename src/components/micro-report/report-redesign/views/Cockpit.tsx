@@ -1,4 +1,9 @@
 import { useMemo } from 'react';
+import {
+  Shield,
+  Skeleton,
+  ShieldCreativeGrid,
+} from '@AiDigital-com/design-system';
 import type { CCRData, Variant } from '../types';
 import {
   fmtCurrency,
@@ -149,6 +154,17 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
     );
   }
 
+  // ── Per-slice loading predicates ──────────────────────────────────────────
+  // Each block lights up the moment its own Lambda has written, independent
+  // of the others. The header strip is always visible once `brand` lands.
+  const benchmarkReady = data.benchmarkRows.length > 0;
+  const creativesReady = (brand.creatives?.length || 0) > 0;
+  const campaignsReady = data.brandCampaigns.length > 0;
+  const topCreativesReady = topCreativesAll.length > 0;
+  // Exec summary is the synthesis — only read it as "done" when its heaviest
+  // inputs are all in. Until then, a 3-line shimmer stands in for the prose.
+  const execReady = benchmarkReady && campaignsReady && creativesReady;
+
   return (
     <div className="v1-body">
       <header className="ccr-hero">
@@ -159,36 +175,88 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
             {brand.productLine || ''} · {brand.parentCompany || ''} · Scanned {data.overall.scanDateLabel}
           </p>
 
-          <div
-            className="ccr-nudge ccr-exec-summary"
-            dangerouslySetInnerHTML={{ __html: sanitizeBold(execSummary) }}
-          />
+          {execReady ? (
+            <div
+              className="ccr-nudge ccr-exec-summary"
+              dangerouslySetInnerHTML={{ __html: sanitizeBold(execSummary) }}
+            />
+          ) : (
+            <div className="ccr-nudge ccr-exec-summary">
+              <Skeleton.Text lines={3} lastWidth="55%" />
+            </div>
+          )}
 
           <div className="ccr-hero-kpis">
             <div className="ccr-kpi">
               <div className="ccr-kpi-label">Measured spend</div>
-              <div className="ccr-kpi-value">{fmtCurrency(brand.totalSpend || 0)}</div>
-              <div className="ccr-kpi-sub">{(brandRow?.sovSpend || 0).toFixed(0)}% share of set</div>
+              <div className="ccr-kpi-value">
+                {brand.totalSpend != null ? (
+                  fmtCurrency(brand.totalSpend)
+                ) : (
+                  <Shield as="line" w="70%" h={22} />
+                )}
+              </div>
+              <div className="ccr-kpi-sub">
+                {benchmarkReady ? (
+                  `${(brandRow?.sovSpend || 0).toFixed(0)}% share of set`
+                ) : (
+                  <Shield as="line" w="55%" h={10} />
+                )}
+              </div>
             </div>
             <div className="ccr-kpi">
               <div className="ccr-kpi-label">Impressions</div>
-              <div className="ccr-kpi-value">{fmtCompact(brand.totalImpressions || 0)}</div>
-              <div className="ccr-kpi-sub">{(brandRow?.sovImpr || 0).toFixed(0)}% share of set</div>
+              <div className="ccr-kpi-value">
+                {brand.totalImpressions != null ? (
+                  fmtCompact(brand.totalImpressions)
+                ) : (
+                  <Shield as="line" w="60%" h={22} />
+                )}
+              </div>
+              <div className="ccr-kpi-sub">
+                {benchmarkReady ? (
+                  `${(brandRow?.sovImpr || 0).toFixed(0)}% share of set`
+                ) : (
+                  <Shield as="line" w="55%" h={10} />
+                )}
+              </div>
             </div>
             <div className="ccr-kpi">
               <div className="ccr-kpi-label">Active creatives</div>
-              <div className="ccr-kpi-value">{brand.creatives.length}</div>
+              <div className="ccr-kpi-value">
+                {creativesReady ? (
+                  brand.creatives.length
+                ) : (
+                  <Shield as="line" w="30%" h={22} />
+                )}
+              </div>
               <div className="ccr-kpi-sub">
-                {brand.creativesByType.video} video · {brand.creativesByType.image} static
+                {creativesReady ? (
+                  <>{brand.creativesByType.video} video · {brand.creativesByType.image} static</>
+                ) : (
+                  <Shield as="line" w="65%" h={10} />
+                )}
               </div>
             </div>
             <div className="ccr-kpi">
               <div className="ccr-kpi-label">Rank in set</div>
               <div className="ccr-kpi-value">
-                <span className="ccr-kpi-rank">#{brandRank || '—'}</span>
-                <span className="ccr-kpi-rank-of">/ {numInSet}</span>
+                {benchmarkReady ? (
+                  <>
+                    <span className="ccr-kpi-rank">#{brandRank || '—'}</span>
+                    <span className="ccr-kpi-rank-of">/ {numInSet}</span>
+                  </>
+                ) : (
+                  <Shield as="line" w="45%" h={22} />
+                )}
               </div>
-              <div className="ccr-kpi-sub">{numInSet - 1} competitors tracked</div>
+              <div className="ccr-kpi-sub">
+                {benchmarkReady ? (
+                  `${numInSet - 1} competitors tracked`
+                ) : (
+                  <Shield as="line" w="60%" h={10} />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -198,32 +266,54 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
           <div className="ccr-vfunnel">
             <div className="ccr-vfunnel-step">
               <div className="ccr-vfunnel-label">Impressions</div>
-              <div className="ccr-vfunnel-value">{fmtCompact(brand.totalImpressions || 0)}</div>
+              <div className="ccr-vfunnel-value">
+                {brand.totalImpressions != null ? (
+                  fmtCompact(brand.totalImpressions)
+                ) : (
+                  <Shield as="line" w="65%" h={20} />
+                )}
+              </div>
             </div>
             <div className="ccr-vfunnel-step">
               <div className="ccr-vfunnel-label">
                 Clicks <span className="ccr-funnel-tag">est.</span>
               </div>
-              <div className="ccr-vfunnel-value">{fmtCompact(Math.round(clicks))}</div>
+              <div className="ccr-vfunnel-value">
+                {campaignsReady ? (
+                  fmtCompact(Math.round(clicks))
+                ) : (
+                  <Shield as="line" w="55%" h={20} />
+                )}
+              </div>
             </div>
             <div className="ccr-vfunnel-step is-hl">
               <div className="ccr-vfunnel-label">Blended CTR</div>
               <div className="ccr-vfunnel-value ccr-funnel-value--hl">
-                {weightedCtr != null ? `${weightedCtr.toFixed(2)}%` : '—'}
+                {campaignsReady && weightedCtr != null ? (
+                  `${weightedCtr.toFixed(2)}%`
+                ) : (
+                  <Shield as="line" w="45%" h={20} />
+                )}
               </div>
             </div>
           </div>
           <div className="ccr-vfunnel-note">
-            <span>
-              {data.brandCampaigns.length} campaign{data.brandCampaigns.length === 1 ? '' : 's'}
-            </span>
-            <span className="sep">·</span>
-            <span>{ctrCoveragePct.toFixed(0)}% measurable</span>
-            {daysRun != null && (
+            {campaignsReady ? (
               <>
+                <span>
+                  {data.brandCampaigns.length} campaign{data.brandCampaigns.length === 1 ? '' : 's'}
+                </span>
                 <span className="sep">·</span>
-                <span>{daysRun}d in-market</span>
+                <span>{ctrCoveragePct.toFixed(0)}% measurable</span>
+                {daysRun != null && (
+                  <>
+                    <span className="sep">·</span>
+                    <span>{daysRun}d in-market</span>
+                  </>
+                )}
               </>
+            ) : (
+              <Shield as="line" w="80%" h={10} />
             )}
           </div>
         </aside>
@@ -232,7 +322,13 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
       <section className="ccr-section">
         <div className="ccr-section-head">
           <h2>Benchmark set</h2>
-          <div className="ccr-section-sub">{data.benchmarkRows.length} advertisers · ranked by measured spend</div>
+          <div className="ccr-section-sub">
+            {benchmarkReady ? (
+              `${data.benchmarkRows.length} advertisers · ranked by measured spend`
+            ) : (
+              <Shield as="line" w="55%" h={10} />
+            )}
+          </div>
         </div>
         <div className="ccr-benchmark-mini">
           <div className="ccr-benchmark-head">
@@ -257,6 +353,30 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
             <div className="ccr-benchmark-impr">Impressions</div>
             <div className="ccr-benchmark-sov">SOV</div>
           </div>
+          {!benchmarkReady &&
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={`sh-${i}`} className="ccr-benchmark-row">
+                <div className="ccr-benchmark-rank">
+                  <Shield as="line" w={16} h={10} />
+                </div>
+                <div className="ccr-benchmark-id">
+                  <Shield as="circle" size={24} />
+                  <Shield as="line" w="60%" h={10} />
+                </div>
+                <div className="ccr-benchmark-spend">
+                  <Shield as="line" w="70%" h={12} />
+                </div>
+                <div className="ccr-benchmark-mix">
+                  <Shield as="line" w="90%" h={12} />
+                </div>
+                <div className="ccr-benchmark-impr">
+                  <Shield as="line" w="65%" h={10} />
+                </div>
+                <div className="ccr-benchmark-sov">
+                  <Shield as="line" w="40%" h={10} />
+                </div>
+              </div>
+            ))}
           {data.benchmarkRows.map((r, i) => (
             <div
               key={r.domain}
@@ -295,19 +415,23 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
             Open creative library →
           </button>
         </div>
-        <div className="ccr-creative-grid cockpit-mini">
-          {topCreativesAll.map((item) => (
-            <CreativeCard
-              key={`${item.host}-${item.creative.id || item.creative.url}`}
-              creative={item.creative}
-              isBrand={item.isBrand}
-              advertiserHost={item.host}
-              withHost
-              size="lg"
-              onOpenVideo={onOpenVideo}
-            />
-          ))}
-        </div>
+        {topCreativesReady ? (
+          <div className="ccr-creative-grid cockpit-mini">
+            {topCreativesAll.map((item) => (
+              <CreativeCard
+                key={`${item.host}-${item.creative.id || item.creative.url}`}
+                creative={item.creative}
+                isBrand={item.isBrand}
+                advertiserHost={item.host}
+                withHost
+                size="lg"
+                onOpenVideo={onOpenVideo}
+              />
+            ))}
+          </div>
+        ) : (
+          <ShieldCreativeGrid n={6} />
+        )}
       </section>
 
       {learnCampaign && (
