@@ -1,24 +1,47 @@
 /**
- * CCR scheduled task-poller — B1 safety net.
- * Runs every minute, drains up to 5 pending tasks per invocation.
- * taskFunctionMap mirrors task-worker.mts exactly.
+ * Scheduled function: claims and executes CCR pipeline tasks.
+ * Runs every minute, loops for 55s.
  */
-import type { Config } from '@netlify/functions';
-import { createTaskPoller } from '@AiDigital-com/design-system/server';
+import { getAppUrl } from '@AiDigital-com/design-system/utils';
 
-export default createTaskPoller({
-  app: 'competitor-campaign-review',
-  taskFunctionMap: {
-    run_audit: 'ccr-discover',
-    ccr_verify: 'ccr-verify',
-    ccr_campaign_detail: 'ccr-campaign-detail',
-    ccr_firecrawl: 'ccr-firecrawl',
-    ccr_publishers: 'ccr-publishers',
-    ccr_synthesize: 'ccr-synthesize',
-  },
-  maxPerInvocation: 5,
-});
+export default async (req: Request) => {
+  const siteUrl = getAppUrl('competitor-campaign-review', { serverUrl: process.env.URL });
+  let processed = 0;
+  const deadline = Date.now() + 55_000;
 
-export const config: Config = {
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${siteUrl}/.netlify/functions/task-worker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      let result: Record<string, unknown>;
+
+      if (contentType.includes('text/event-stream')) {
+        const text = await res.text();
+        result = { status: text.includes('done') ? 'ok' : 'streaming', taskType: 'streaming' };
+      } else {
+        result = await res.json() as Record<string, unknown>;
+      }
+
+      if (result.status === 'idle') {
+        await new Promise(r => setTimeout(r, 5_000));
+      } else {
+        processed++;
+        console.log(`[task-poller] Processed: ${result.taskType} (${result.status})`);
+        await new Promise(r => setTimeout(r, 2_000));
+      }
+    } catch (err) {
+      console.warn('[task-poller] Worker call failed:', err);
+      await new Promise(r => setTimeout(r, 5_000));
+    }
+  }
+
+  return Response.json({ processed });
+};
+
+export const config = {
   schedule: '* * * * *',
 };
