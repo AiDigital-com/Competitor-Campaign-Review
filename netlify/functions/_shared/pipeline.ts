@@ -8,6 +8,7 @@
  * - Updating job_status progress
  * - Checking if sibling tasks are complete (for parallel phase)
  */
+import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getAppUrl } from '@AiDigital-com/design-system/utils';
 
@@ -156,8 +157,18 @@ export async function markComplete(
     updated_at: new Date().toISOString(),
   }).eq('id', jobId);
 
+  const { data: existing } = await supabase
+    .from(SESSION_TABLE)
+    .select('share_token')
+    .eq('id', sessionId)
+    .single();
+
+  const shareToken = existing?.share_token || randomUUID();
+
   await supabase.from(SESSION_TABLE).update({
     status: 'complete',
+    share_token: shareToken,
+    is_public: true,
     updated_at: new Date().toISOString(),
   }).eq('id', sessionId);
 }
