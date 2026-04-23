@@ -90,6 +90,60 @@ function creativePoster(c: Record<string, unknown>): string | null {
   return creativeType(c) === 'image' ? ((c.url as string) || null) : null;
 }
 
+// ---------- Creative row merge (multi-channel consolidation) ----------
+/**
+ * AdClarity (and the ccr pipeline) reports one row per (creative, channel)
+ * pair — so a single creative that runs on Mobile Video + Desktop Video
+ * shows up as two rows with the same id/url. For the Creative Library tile
+ * we want ONE tile per asset with consolidated totals; for a per-channel
+ * filter we want the slice's numbers. Merge by (id, url), sum spend +
+ * impressions, impressions-weighted ctr, min firstSeen, max lastSeen.
+ * Preserve per-channel breakdown in `_channels` for slice-level filtering.
+ */
+function mergeCreativeRows(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const byKey = new Map<string, Record<string, unknown> & { _channels: Array<{ group: string; name: string; spend: number; impressions: number; ctr: number | null }> }>();
+  for (const c of rows) {
+    const key = `${c.id || ''}|${c.url || ''}`;
+    const slice = {
+      group: coarseChannel((c.channelName as string) || ''),
+      name: (c.channelName as string) || '',
+      spend: Number(c.spend) || 0,
+      impressions: Number(c.impressions) || 0,
+      ctr: (c.ctr as number | null | undefined) ?? null,
+    };
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...c, _channels: [slice] });
+      continue;
+    }
+    existing._channels.push(slice);
+    // Sum totals
+    existing.spend = (Number(existing.spend) || 0) + slice.spend;
+    existing.impressions = (Number(existing.impressions) || 0) + slice.impressions;
+    // Impressions-weighted ctr across slices
+    const totalImpr = existing._channels.reduce((a, s) => a + s.impressions, 0);
+    existing.ctr = totalImpr > 0
+      ? existing._channels.reduce((a, s) => a + s.impressions * (s.ctr ?? 0), 0) / totalImpr
+      : null;
+    // firstSeen: min (lexicographic works for ISO YYYY-MM-DD)
+    const fsB = c.firstSeen as string | undefined;
+    if (fsB && (!existing.firstSeen || fsB < (existing.firstSeen as string))) {
+      existing.firstSeen = fsB;
+    }
+    // lastSeen: max
+    const lsB = c.lastSeen as string | undefined;
+    if (lsB && (!existing.lastSeen || lsB > (existing.lastSeen as string))) {
+      existing.lastSeen = lsB;
+    }
+    // channelName for display: dominant channel (highest spend slice)
+    const dominant = existing._channels.reduce((a, b) => (b.spend > a.spend ? b : a));
+    existing.channelName = dominant.name;
+  }
+  return Array.from(byKey.values());
+}
+
 // ---------- Domain decoration ----------
 function decorateDomain(
   dRow: Record<string, unknown> | null | undefined,
@@ -117,23 +171,34 @@ function decorateDomain(
   }).filter((g) => g.spend > 0 || g.impressions > 0);
 
   const rawCreatives = (dRow.creatives as Record<string, unknown>[]) || [];
-  const creatives: DecoratedCreative[] = rawCreatives.map((c) => ({
-    id: c.id as string | undefined,
-    url: String(c.url || ''),
-    mimeType: c.mimeType as string | undefined,
-    channelName: c.channelName as string | undefined,
-    campaignName: c.campaignName as string | undefined,
-    firstSeen: c.firstSeen as string | undefined,
-    lastSeen: c.lastSeen as string | undefined,
-    impressions: c.impressions as number | undefined,
-    spend: c.spend as number | undefined,
-    ctr: (c.ctr as number | null | undefined) ?? null,
-    type: creativeType(c),
-    poster: creativePoster(c),
-    group: coarseChannel((c.channelName as string) || ''),
-    shortName: campaignShortName(c.campaignName as string),
-    firstSeenLabel: fmtDate(c.firstSeen as string),
-  }));
+  const mergedCreatives = mergeCreativeRows(rawCreatives);
+  const creatives: DecoratedCreative[] = mergedCreatives.map((c) => {
+    const slices = ((c as { _channels?: Array<{ group: string; name: string; spend: number; impressions: number; ctr: number | null }> })._channels) || [];
+    return {
+      id: c.id as string | undefined,
+      url: String(c.url || ''),
+      mimeType: c.mimeType as string | undefined,
+      channelName: c.channelName as string | undefined,
+      campaignName: c.campaignName as string | undefined,
+      firstSeen: c.firstSeen as string | undefined,
+      lastSeen: c.lastSeen as string | undefined,
+      impressions: c.impressions as number | undefined,
+      spend: c.spend as number | undefined,
+      ctr: (c.ctr as number | null | undefined) ?? null,
+      type: creativeType(c),
+      poster: creativePoster(c),
+      group: coarseChannel((c.channelName as string) || ''),
+      shortName: campaignShortName(c.campaignName as string),
+      firstSeenLabel: fmtDate(c.firstSeen as string),
+      channels: slices.map((s) => ({
+        group: s.group as ChannelGroup,
+        name: s.name,
+        spend: s.spend,
+        impressions: s.impressions,
+        ctr: s.ctr,
+      })),
+    };
+  });
 
   return {
     domain,

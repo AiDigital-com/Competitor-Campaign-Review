@@ -28,6 +28,19 @@ export interface DecoratedChannel {
   group: ChannelGroup;
 }
 
+/** Per-channel slice preserved after merging duplicate (id, url) rows.
+ *  One creative asset often has a row per channel placement (Mobile Video +
+ *  Desktop Video, Social Video + Social Display, etc.). Consolidating by
+ *  (id, url) gives one tile per asset but keeps the per-channel metrics so
+ *  a channel filter can drill back into a single slice's numbers. */
+export interface CreativeChannelSlice {
+  group: ChannelGroup;
+  name: string;
+  spend: number;
+  impressions: number;
+  ctr: number | null;
+}
+
 export interface DecoratedCreative {
   id?: string;
   url: string;
@@ -36,14 +49,19 @@ export interface DecoratedCreative {
   campaignName?: string;
   firstSeen?: string;
   lastSeen?: string;
+  /** Totals across all channels. When a channel filter is active, the view
+   *  overrides this with the matched slice's value. */
   impressions?: number;
   spend?: number;
   ctr?: number | null;
   type: CreativeType;
   poster: string | null;
+  /** Dominant channel group (by spend). Use `channels[].group` for membership. */
   group: ChannelGroup;
   shortName: string;
   firstSeenLabel: string;
+  /** Per-channel breakdown (1 entry for single-channel creatives, N for multi). */
+  channels: CreativeChannelSlice[];
 }
 
 export interface DecoratedDomain {

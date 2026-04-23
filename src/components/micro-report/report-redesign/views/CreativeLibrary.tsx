@@ -39,7 +39,26 @@ export function CreativeLibrary({ data, onOpenVideo, focusDomain, onFocusDomainC
     if (!domainObj) return [];
     let list = domainObj.creatives.slice();
     if (focusType !== 'all') list = list.filter((c) => c.type === focusType);
-    if (focusChan !== 'all') list = list.filter((c) => c.group === focusChan);
+    if (focusChan !== 'all') {
+      // A creative belongs to a channel if any of its per-channel slices
+      // match. When a channel filter is active, the tile displays ONLY that
+      // channel's slice metrics (not the consolidated totals) — otherwise
+      // the counts would double-count cross-channel spend.
+      list = list
+        .filter((c) => (c.channels || []).some((ch) => ch.group === focusChan))
+        .map((c) => {
+          const slice = (c.channels || []).find((ch) => ch.group === focusChan);
+          if (!slice) return c;
+          return {
+            ...c,
+            spend: slice.spend,
+            impressions: slice.impressions,
+            ctr: slice.ctr,
+            channelName: slice.name,
+            group: slice.group,
+          };
+        });
+    }
     if (focusSort === 'spend') list.sort((a, b) => (b.spend || 0) - (a.spend || 0));
     else if (focusSort === 'impressions') list.sort((a, b) => (b.impressions || 0) - (a.impressions || 0));
     else if (focusSort === 'recent')
@@ -50,11 +69,15 @@ export function CreativeLibrary({ data, onOpenVideo, focusDomain, onFocusDomainC
   const totalSpend = items.reduce((a, c) => a + (c.spend || 0), 0);
   const totalImpr = items.reduce((a, c) => a + (c.impressions || 0), 0);
 
+  // Any-channel membership count — a creative on both Video + Display
+  // counts for both groups so the filter chips reflect reality.
   const chanCounts = useMemo(
     () =>
       CH_GROUPS.map((g) => ({
         group: g,
-        count: (domainObj?.creatives || []).filter((c) => c.group === g).length,
+        count: (domainObj?.creatives || []).filter((c) =>
+          (c.channels || []).some((ch) => ch.group === g),
+        ).length,
         hue: CH_HUE[g],
       })).filter((x) => x.count),
     [domainObj],
