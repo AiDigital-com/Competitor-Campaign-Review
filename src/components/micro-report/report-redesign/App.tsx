@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import { Rail, ReportTopbar } from '@AiDigital-com/design-system';
+import {
+  Rail,
+  ReportTopbar,
+  Skeleton,
+  ShieldHero,
+  ShieldKpiRow,
+  ShieldCreativeGrid,
+  ShieldCampaignList,
+  ShieldMatrix,
+  ShieldPublisherList,
+  ShieldLandingGrid,
+} from '@AiDigital-com/design-system';
 import type { CCRData, Variant, Mode, Theme, FX } from './types';
 
 // ReportTopbar's sharing/download configs live in the d.ts but aren't
@@ -103,6 +114,28 @@ export function App({
 
   const brandLabel = data.brand?.parentCompany || data.overall.brandHost || 'Brand';
 
+  // Per-section loading predicates — shields render while Lambdas are still
+  // writing to report_data. Empty array / missing brand = not yet landed.
+  // Print mode skips shields (we want the full static export to reflect
+  // whatever data exists at snapshot time, even if partial).
+  const isPrint = mode === 'print';
+  const loading = {
+    v1: !isPrint && (!data.brand || data.benchmarkRows.length === 0),
+    v2: !isPrint && data.allCampaigns.length === 0,
+    v3: !isPrint && data.allCampaigns.length === 0,
+    v4:
+      !isPrint &&
+      (data.benchmarkRows.length === 0 || data.allCampaigns.length === 0),
+    v5:
+      !isPrint &&
+      data.publisherList.length === 0 &&
+      data.brandPublishers.length === 0,
+    v6:
+      !isPrint &&
+      data.landingPages.length === 0 &&
+      data.brandLandingPages.length === 0,
+  };
+
   return (
     <div className="shell">
       <Rail hidden />
@@ -149,12 +182,22 @@ export function App({
           }}
         >
           {isActive('v1') && (
-            <Cockpit
-              data={data}
-              onVariantChange={setVariant}
-              onFocusDomain={handleFocusDomain}
-              onOpenVideo={setLightboxTarget}
-            />
+            <Skeleton.Show
+              when={loading.v1}
+              fallback={
+                <>
+                  <ShieldHero />
+                  <ShieldKpiRow n={4} />
+                </>
+              }
+            >
+              <Cockpit
+                data={data}
+                onVariantChange={setVariant}
+                onFocusDomain={handleFocusDomain}
+                onOpenVideo={setLightboxTarget}
+              />
+            </Skeleton.Show>
           )}
         </section>
 
@@ -166,12 +209,14 @@ export function App({
           }}
         >
           {isActive('v2') && (
-            <CreativeLibrary
-              data={data}
-              onOpenVideo={setLightboxTarget}
-              focusDomain={focusDomain}
-              onFocusDomainChange={setFocusDomain}
-            />
+            <Skeleton.Show when={loading.v2} fallback={<ShieldCreativeGrid n={8} />}>
+              <CreativeLibrary
+                data={data}
+                onOpenVideo={setLightboxTarget}
+                focusDomain={focusDomain}
+                onFocusDomainChange={setFocusDomain}
+              />
+            </Skeleton.Show>
           )}
         </section>
 
@@ -182,7 +227,11 @@ export function App({
             sectionRefs.current.v3 = el;
           }}
         >
-          {isActive('v3') && <TopCampaigns data={data} />}
+          {isActive('v3') && (
+            <Skeleton.Show when={loading.v3} fallback={<ShieldCampaignList n={6} />}>
+              <TopCampaigns data={data} />
+            </Skeleton.Show>
+          )}
         </section>
 
         <section
@@ -192,7 +241,14 @@ export function App({
             sectionRefs.current.v4 = el;
           }}
         >
-          {isActive('v4') && <Matrix data={data} />}
+          {isActive('v4') && (
+            <Skeleton.Show
+              when={loading.v4}
+              fallback={<ShieldMatrix cols={4} rows={5} />}
+            >
+              <Matrix data={data} />
+            </Skeleton.Show>
+          )}
         </section>
 
         <section
@@ -202,7 +258,11 @@ export function App({
             sectionRefs.current.v5 = el;
           }}
         >
-          {isActive('v5') && <PublisherMap data={data} />}
+          {isActive('v5') && (
+            <Skeleton.Show when={loading.v5} fallback={<ShieldPublisherList n={8} />}>
+              <PublisherMap data={data} />
+            </Skeleton.Show>
+          )}
         </section>
 
         <section
@@ -212,7 +272,11 @@ export function App({
             sectionRefs.current.v6 = el;
           }}
         >
-          {isActive('v6') && <LandingPages data={data} />}
+          {isActive('v6') && (
+            <Skeleton.Show when={loading.v6} fallback={<ShieldLandingGrid n={6} />}>
+              <LandingPages data={data} />
+            </Skeleton.Show>
+          )}
         </section>
 
         <section
