@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import {
   Shield,
-  Skeleton,
   ShieldCreativeGrid,
 } from '@AiDigital-com/design-system';
 import type { CCRData, Variant } from '../types';
@@ -161,9 +160,11 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
   const creativesReady = (brand.creatives?.length || 0) > 0;
   const campaignsReady = data.brandCampaigns.length > 0;
   const topCreativesReady = topCreativesAll.length > 0;
-  // Exec summary is the synthesis — only read it as "done" when its heaviest
-  // inputs are all in. Until then, a 3-line shimmer stands in for the prose.
-  const execReady = benchmarkReady && campaignsReady && creativesReady;
+  // Exec summary grows progressively inside the memo above — each heroCopy
+  // fragment only pushes when its inputs are present. We render it as-is
+  // from the moment `brand` lands, so users see the narrative accrete
+  // (rank → channel split → CTR → creative window) rather than wait on a
+  // strict AND-gate that could stall if any one slice never populates.
 
   return (
     <div className="v1-body">
@@ -175,16 +176,11 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
             {brand.productLine || ''} · {brand.parentCompany || ''} · Scanned {data.overall.scanDateLabel}
           </p>
 
-          {execReady ? (
-            <div
-              className="ccr-nudge ccr-exec-summary"
-              dangerouslySetInnerHTML={{ __html: sanitizeBold(execSummary) }}
-            />
-          ) : (
-            <div className="ccr-nudge ccr-exec-summary">
-              <Skeleton.Text lines={3} lastWidth="55%" />
-            </div>
-          )}
+          <div
+            className="ccr-nudge ccr-exec-summary"
+            dangerouslySetInnerHTML={{ __html: sanitizeBold(execSummary) }}
+          />
+
 
           <div className="ccr-hero-kpis">
             <div className="ccr-kpi">
