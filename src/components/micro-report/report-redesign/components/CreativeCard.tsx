@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { DecoratedCreative } from '../types';
 import { CH_HUE } from '../channels';
 import { fmtCurrency, fmtCompact } from '../data';
@@ -22,14 +22,41 @@ function CreativeThumb({ creative, size = 'md' }: { creative: DecoratedCreative;
   const isImage = creative.type === 'image';
   const imagePoster = isImage ? (creative.poster || creative.url || null) : creative.poster;
   const [mediaErrored, setMediaErrored] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const showImage = isImage && imagePoster && !mediaErrored;
   const showVideoFrame = isVideo && creative.url && !mediaErrored;
   const hasMedia = showImage || showVideoFrame;
 
+  // Hover-to-play for video thumbs: play muted on enter, pause + reset to
+  // first-frame poster on leave. Failures (CORS, autoplay block) silently
+  // no-op — the still frame remains visible.
+  const handleMouseEnter = () => {
+    if (!showVideoFrame) return;
+    setIsHovering(true);
+    const v = videoRef.current;
+    if (!v) return;
+    // preload="metadata" only fetched the header; play() forces more buffering.
+    const p = v.play();
+    if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay denied; keep poster */ });
+  };
+  const handleMouseLeave = () => {
+    if (!showVideoFrame) return;
+    setIsHovering(false);
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.pause();
+      v.currentTime = Math.min(0.1, v.duration || 0.1);
+    } catch { /* noop */ }
+  };
+
   return (
     <div
-      className={`ccr-thumb size-${size} type-${creative.type} ${hasMedia ? 'has-poster' : 'no-poster'}`}
+      className={`ccr-thumb size-${size} type-${creative.type} ${hasMedia ? 'has-poster' : 'no-poster'} ${isHovering ? 'is-hovering' : ''}`}
       style={{ '--hue': hue, '--seed': seed } as React.CSSProperties}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <div className="ccr-thumb-gradient" />
       {showImage && (
@@ -45,6 +72,7 @@ function CreativeThumb({ creative, size = 'md' }: { creative: DecoratedCreative;
         // an implicit poster. muted + playsInline keeps mobile quiet.
         // crossOrigin="anonymous" avoids tainting when AdClarity CDN sets CORS.
         <video
+          ref={videoRef}
           className="ccr-thumb-video"
           src={creative.url}
           preload="metadata"
@@ -53,7 +81,6 @@ function CreativeThumb({ creative, size = 'md' }: { creative: DecoratedCreative;
           crossOrigin="anonymous"
           // Advance one frame so Safari / mobile show a visible poster instead of black
           // (AdClarity MP4s don't embed a poster frame).
-          // eslint-disable-next-line react/no-unknown-property
           onLoadedMetadata={(e) => {
             const v = e.currentTarget;
             try { v.currentTime = Math.min(0.1, v.duration || 0.1); } catch { /* noop */ }

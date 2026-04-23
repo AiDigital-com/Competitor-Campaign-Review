@@ -524,6 +524,18 @@ html[data-theme="light"] .ccr-thumb-gradient {
   pointer-events: none;
 }
 .ccr-thumb-video { background: transparent; }
+
+/* While hovering a video card, fade the dark overlay + center play button
+   so the playing video is clearly visible. */
+.ccr-thumb.is-hovering .ccr-thumb-overlay { opacity: 0; }
+.ccr-thumb.is-hovering .ccr-thumb-play {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+}
+.ccr-thumb-overlay,
+.ccr-thumb-play {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
 .ccr-thumb-overlay {
   position: absolute; inset: 0; z-index: 3;
   background: linear-gradient(180deg, transparent 65%, rgba(0,0,0,0.45) 100%);
