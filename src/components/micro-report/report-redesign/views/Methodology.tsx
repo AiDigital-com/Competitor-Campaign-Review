@@ -42,9 +42,10 @@ export function Methodology({ data }: Props) {
           <div className="ccr-method-n">01</div>
           <h3>Competitor discovery</h3>
           <p>
-            CCR seeds <b>{data.overall.candidateCount}</b> candidate domains from category taxonomy and
-            advertiser overlap. A human-in-the-loop step verifies <b>{data.verifiedDomains.length}</b> as
-            true competitors; the rest remain candidates for later scans.
+            CCR seeds <b>{data.overall.candidateCount}</b> candidate domains from category taxonomy,
+            advertiser overlap, and LLM world-knowledge. A Gemini classification step verifies
+            <b> {data.verifiedDomains.length}</b> as true competitors by matching product line against
+            the brand; the rest are dropped for this scan.
           </p>
           <div className="ccr-method-tags">
             {data.verifiedDomains.map((d) => (
