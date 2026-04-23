@@ -60,19 +60,35 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
 
   const learnCampaign = data.competitorCampaigns[0];
 
-  const { ctr: weightedCtr, clicks, clickedImpressions } = useMemo(
-    () => computeBlendedCtr(data.brandCampaigns),
-    [data.brandCampaigns],
-  );
+  // CTR source priority: brandCampaigns (true campaign aggregates) when
+  // present, otherwise fall back to brand.creatives. The campaigns rollup
+  // Lambda sometimes writes no key for the brand itself (observed on
+  // equitable.com session) — creatives carry the same ctr + impressions
+  // fields and stream in earlier, so the funnel resolves.
+  const { ctr: weightedCtr, clicks, clickedImpressions } = useMemo(() => {
+    if (data.brandCampaigns.length > 0) {
+      return computeBlendedCtr(data.brandCampaigns);
+    }
+    // Duck-typed fallback — creatives share { ctr, impressions } shape.
+    const creatives = data.brand?.creatives ?? [];
+    const source = creatives.map((c) => ({ ctr: c.ctr ?? null, impressions: c.impressions ?? 0 }));
+    return computeBlendedCtr(source as unknown as typeof data.brandCampaigns);
+  }, [data.brandCampaigns, data.brand]);
   const ctrCoveragePct = brand?.totalImpressions ? (clickedImpressions / brand.totalImpressions) * 100 : 0;
-  const firstSeen = useMemo(
-    () => data.brandCampaigns.map((c) => c.first_seen).filter(Boolean).sort()[0],
-    [data.brandCampaigns],
-  );
-  const lastSeen = useMemo(
-    () => data.brandCampaigns.map((c) => c.last_seen).filter(Boolean).sort().reverse()[0],
-    [data.brandCampaigns],
-  );
+  // First/last seen — prefer campaigns dates, fall back to creatives when
+  // the campaigns rollup is missing the brand key.
+  const firstSeen = useMemo(() => {
+    const campaignDates = data.brandCampaigns.map((c) => c.first_seen).filter(Boolean);
+    if (campaignDates.length) return campaignDates.sort()[0];
+    const creativeDates = (data.brand?.creatives ?? []).map((c) => c.firstSeen).filter(Boolean) as string[];
+    return creativeDates.sort()[0];
+  }, [data.brandCampaigns, data.brand]);
+  const lastSeen = useMemo(() => {
+    const campaignDates = data.brandCampaigns.map((c) => c.last_seen).filter(Boolean);
+    if (campaignDates.length) return campaignDates.sort().reverse()[0];
+    const creativeDates = (data.brand?.creatives ?? []).map((c) => c.lastSeen).filter(Boolean) as string[];
+    return creativeDates.sort().reverse()[0];
+  }, [data.brandCampaigns, data.brand]);
   const daysRun =
     firstSeen && lastSeen
       ? Math.max(1, Math.round((new Date(lastSeen).getTime() - new Date(firstSeen).getTime()) / 86_400_000))
@@ -158,7 +174,10 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
   // of the others. The header strip is always visible once `brand` lands.
   const benchmarkReady = data.benchmarkRows.length > 0;
   const creativesReady = (brand.creatives?.length || 0) > 0;
-  const campaignsReady = data.brandCampaigns.length > 0;
+  // Campaigns readiness is actually CTR readiness — the funnel shows
+  // Impressions/Clicks/CTR. Creatives carry the same ctr+impressions
+  // signal when brandCampaigns is absent, so accept either as "ready".
+  const campaignsReady = data.brandCampaigns.length > 0 || weightedCtr != null;
   const topCreativesReady = topCreativesAll.length > 0;
   // Exec summary grows progressively inside the memo above — each heroCopy
   // fragment only pushes when its inputs are present. We render it as-is
@@ -296,9 +315,15 @@ export function Cockpit({ data, onVariantChange, onFocusDomain, onOpenVideo }: P
           <div className="ccr-vfunnel-note">
             {campaignsReady ? (
               <>
-                <span>
-                  {data.brandCampaigns.length} campaign{data.brandCampaigns.length === 1 ? '' : 's'}
-                </span>
+                {data.brandCampaigns.length > 0 ? (
+                  <span>
+                    {data.brandCampaigns.length} campaign{data.brandCampaigns.length === 1 ? '' : 's'}
+                  </span>
+                ) : (
+                  <span>
+                    {brand.creatives.length} creative{brand.creatives.length === 1 ? '' : 's'}
+                  </span>
+                )}
                 <span className="sep">·</span>
                 <span>{ctrCoveragePct.toFixed(0)}% measurable</span>
                 {daysRun != null && (
