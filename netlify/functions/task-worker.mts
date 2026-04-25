@@ -7,11 +7,11 @@ import { createTaskWorker } from '@AiDigital-com/design-system/server';
 export default createTaskWorker({
   app: 'competitor-campaign-review',
   taskFunctionMap: {
-    run_audit: 'ccr-discover',
-    ccr_verify: 'ccr-verify',
-    ccr_campaign_detail: 'ccr-campaign-detail',
-    ccr_firecrawl: 'ccr-firecrawl',
-    ccr_publishers: 'ccr-publishers',
-    ccr_synthesize: 'ccr-synthesize',
+    run_audit: 'ccr-discover-background',
+    ccr_verify: 'ccr-verify-background',
+    ccr_campaign_detail: 'ccr-campaign-detail-background',
+    ccr_firecrawl: 'ccr-firecrawl-background',
+    ccr_publishers: 'ccr-publishers-background',
+    ccr_synthesize: 'ccr-synthesize-background',
   },
 });
