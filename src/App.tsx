@@ -53,9 +53,10 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    if (!sidebarSupabase) return
+    if (!sidebarSupabase || !userId) return
     sidebarSupabase.from(SESSION_TABLE)
       .select(`id, ${TITLE_FIELD}, status, created_at`)
+      .eq('user_id', userId)
       .eq('deleted_by_user', false)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -67,7 +68,7 @@ export default function App() {
           createdAt: r.created_at,
         })))
       })
-  }, [refreshKey, sidebarSupabase])
+  }, [refreshKey, sidebarSupabase, userId])
 
   const handlersRef = useRef<{
     onSelect: (id: string) => void
