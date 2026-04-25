@@ -20,28 +20,25 @@ export function getSupabase(): SupabaseClient {
 }
 
 /**
- * Merge partial data into ccr_sessions.report_data (jsonb).
- * Uses Supabase's jsonb concatenation via RPC or direct update.
+ * Merge partial data into ccr_sessions.report_data (jsonb) atomically.
+ * Phase 3 runs three writers (campaign-detail, firecrawl, publishers) in
+ * parallel; a read-modify-write pattern races and silently drops one
+ * writer's payload. Uses ccr_merge_report_data RPC which performs a single
+ * UPDATE with jsonb || (Postgres serializes UPDATEs on the same row).
  */
 export async function mergeReportData(
   supabase: SupabaseClient,
   sessionId: string,
   partial: Record<string, any>,
 ): Promise<void> {
-  // Read current, merge, write back (atomic enough for single-writer pipeline)
-  const { data } = await supabase
-    .from(SESSION_TABLE)
-    .select('report_data')
-    .eq('id', sessionId)
-    .single();
-
-  const current = (data?.report_data as Record<string, any>) || {};
-  const merged = { ...current, ...partial };
-
-  await supabase
-    .from(SESSION_TABLE)
-    .update({ report_data: merged, updated_at: new Date().toISOString() })
-    .eq('id', sessionId);
+  const { error } = await supabase.rpc('ccr_merge_report_data', {
+    p_session_id: sessionId,
+    p_partial: partial,
+  });
+  if (error) {
+    console.error('[mergeReportData] RPC failed:', error.message);
+    throw new Error(`mergeReportData failed: ${error.message}`);
+  }
 }
 
 /**
