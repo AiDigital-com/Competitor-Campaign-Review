@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@AiDigital-com/design-system": "^7.58.0",
+    "@AiDigital-com/design-system": "^7.62.0",
     "@clerk/backend": "^3.2.1",
     "@clerk/react": "^6.1.1",
     "@google-cloud/bigquery": "^7.9.1",
