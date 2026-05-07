@@ -74,16 +74,28 @@ export default async (req: Request) => {
     console.log(`[firecrawl] ${landingPages.length}/${targets.length} pages crawled`);
     landingPages.forEach(lp => console.log(`  ${lp.domain}: title="${lp.title?.substring(0, 50)}" screenshot=${!!lp.screenshotUrl}`));
 
-    // Track Firecrawl API cost
+    // Track Firecrawl API cost — canonical billing ledger (external_api_usage,
+    // not token_usage). Firecrawl is page-billed, not token-billed.
     if (landingPages.length > 0) {
-      const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
-      const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
-      const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
-      logTokenUsage(supabase as any, {
-        userId, orgId, app: 'competitor-campaign-review:firecrawl', source: detectSource(userId),
-        aiProvider: 'firecrawl', aiModel: 'scrape-v1',
-        inputTokens: 0, outputTokens: landingPages.length, totalTokens: landingPages.length,
-      }).catch(() => {});
+      try {
+        const { logExternalApiUsage } = await import('@AiDigital-com/design-system/server');
+        const { detectSource } = await import('@AiDigital-com/design-system/logger');
+        const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+        const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
+        await logExternalApiUsage({
+          supabase: supabase as any,
+          vendor: 'firecrawl',
+          service: 'scrape',
+          billing_model: 'per_page',
+          quantity: landingPages.length,
+          unit_price_usd: 0.003,
+          app: 'competitor-campaign-review',
+          source: detectSource(userId),
+          user_id: userId,
+          org_id: orgId,
+          entity_id: jobId,
+        });
+      } catch { /* fire-and-forget */ }
     }
 
     // Write to report_data
