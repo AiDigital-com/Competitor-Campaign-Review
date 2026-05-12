@@ -198,7 +198,7 @@ export default function MobileApp() {
       <main className="ccr-m-main">
         {phase === 'loading' && (
           <div className="ccr-m-loading">
-            <ProgressBar />
+            <ProgressBar value={0} />
           </div>
         )}
 
@@ -216,7 +216,7 @@ export default function MobileApp() {
           <>
             {phase === 'processing' && (
               <div className="ccr-m-progress">
-                <ProgressBar value={reportData?.phase === 'complete' ? 100 : undefined} />
+                <ProgressBar value={reportData?.phase === 'complete' ? 1 : 0.5} />
                 <span className="ccr-m-progress-label">{progressStep || 'Starting analysis…'}</span>
               </div>
             )}

@@ -129,7 +129,7 @@ export function MobileReport({ data }: Props) {
                 <div key={comp.domain} className="ccr-m-card">
                   <div className="ccr-m-card-header">
                     <span className="ccr-m-card-domain">{comp.domain}</span>
-                    {isBrand && <StatusBadge status="info" label="Brand" />}
+                    {isBrand && <span className="aidl-status-badge aidl-status-badge--info">Brand</span>}
                   </div>
                   <div className="ccr-m-card-metrics">
                     <span>{fmtNumber(comp.totalImpressions)} imps</span>
