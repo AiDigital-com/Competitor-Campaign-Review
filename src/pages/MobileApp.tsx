@@ -16,6 +16,13 @@ type Phase = 'loading' | 'campaign_gate' | 'intake' | 'processing' | 'report_rea
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
+interface LeadMeta {
+  email: string
+  orgName: string
+  brandInput: string
+  brandDomain: string | null
+}
+
 export default function MobileApp() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [jobId, setJobId] = useState<string | null>(null)
@@ -24,6 +31,11 @@ export default function MobileApp() {
   const [error, setError] = useState<string | null>(null)
   const [campaignSlug, setCampaignSlug] = useState<string | null>(null)
   const [campaignGateMessage, setCampaignGateMessage] = useState<string | null>(null)
+  // Lead fields collected at intake — kept so the "Get Full Report" CTA at
+  // the bottom of the mobile report can re-call mobile-save-lead to resolve
+  // share_url once the pipeline finishes.
+  const [leadMeta, setLeadMeta] = useState<LeadMeta>({ email: '', orgName: '', brandInput: '', brandDomain: null })
+  const [openingFullReport, setOpeningFullReport] = useState(false)
   const supabaseRef = useRef(createClient(supabaseUrl, supabaseAnonKey))
 
   // Check campaign slug on mount
@@ -88,6 +100,7 @@ export default function MobileApp() {
       setProgressStep('Discovering competitors…')
       const sessionId = crypto.randomUUID()
       setJobId(sessionId)
+      setLeadMeta({ email, orgName: org, brandInput: userInput, brandDomain: brand_domain })
 
       // Persist the lead immediately so capture is decoupled from pipeline
       // success. Best-effort; the column adds don't block the analysis.
@@ -203,6 +216,38 @@ export default function MobileApp() {
       })
   }, [jobId, progressStep])
 
+  // "Get Full Report" CTA on the mobile report — resolves share_url via
+  // mobile-save-lead (which also refreshes the lead row with the final URL)
+  // and redirects the user to /r/<token>. Mirrors AIO's flow.
+  const handleViewFullReport = useCallback(async () => {
+    if (!jobId || openingFullReport) return
+    setOpeningFullReport(true)
+    try {
+      const res = await fetch('/.netlify/functions/mobile-save-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: jobId,
+          email: leadMeta.email,
+          orgName: leadMeta.orgName,
+          brandName: leadMeta.brandInput,
+          brandDomain: leadMeta.brandDomain ?? undefined,
+          ...(campaignSlug ? { campaignSlug } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to load report')
+      const { shareUrl } = await res.json()
+      if (shareUrl) {
+        window.location.href = shareUrl
+      } else {
+        throw new Error('No share URL returned')
+      }
+    } catch {
+      setError('Could not open the full report. Please try again.')
+      setOpeningFullReport(false)
+    }
+  }, [jobId, openingFullReport, leadMeta, campaignSlug])
+
   return (
     <div className="ccr-m-app">
       <header className="ccr-m-header">
@@ -238,7 +283,11 @@ export default function MobileApp() {
                 <span className="ccr-m-progress-label">{progressStep || 'Starting analysis…'}</span>
               </div>
             )}
-            <MobileReport data={reportData || {}} />
+            <MobileReport
+              data={reportData || {}}
+              onViewFullReport={phase === 'report_ready' ? handleViewFullReport : undefined}
+              loadingFullReport={openingFullReport}
+            />
           </>
         )}
 
