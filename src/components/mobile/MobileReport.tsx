@@ -7,6 +7,14 @@ import type { CampaignData, CreativeData } from '../../lib/types'
 
 interface Props {
   data: Record<string, any>
+  /**
+   * When set, a "Get Full Report" CTA renders at the bottom of the mobile
+   * report and invokes this callback. MobileApp wires it to mobile-save-lead
+   * (which resolves share_url) + redirects to /r/<token>. Omitted while the
+   * pipeline is still processing.
+   */
+  onViewFullReport?: () => void
+  loadingFullReport?: boolean
 }
 
 function fmtNumber(n: number): string {
@@ -52,7 +60,7 @@ function getTopCampaign(comp: CampaignData): { name: string; creatives: Creative
   return topName ? { name: topName, creatives: groups.get(topName)! } : null
 }
 
-export function MobileReport({ data }: Props) {
+export function MobileReport({ data, onViewFullReport, loadingFullReport }: Props) {
   const brand = data.brand as CampaignData | undefined
   const competitors = (data.competitors || []) as CampaignData[]
   const allDomains = brand ? [brand, ...competitors] : []
@@ -188,6 +196,22 @@ export function MobileReport({ data }: Props) {
           </div>
         ) : null}
       </ReportBlock>
+
+      {onViewFullReport && (
+        <div className="ccr-m-cta">
+          <button
+            type="button"
+            className="ccr-m-btn ccr-m-btn--full"
+            onClick={onViewFullReport}
+            disabled={loadingFullReport}
+          >
+            {loadingFullReport ? 'Opening…' : 'Get Full Report'}
+          </button>
+          <p className="ccr-m-cta-sub">
+            Open the complete report with all competitors, creatives, and campaign details.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
