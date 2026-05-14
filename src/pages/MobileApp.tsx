@@ -59,8 +59,11 @@ export default function MobileApp() {
       })
   }, [])
 
-  // Submit: mobile orchestrator resolves brand → dispatch pipeline
-  const handleSubmit = useCallback(async (userInput: string) => {
+  // Submit: mobile orchestrator resolves brand → dispatch pipeline. Email +
+  // org are now collected upfront (same normalized landing-page shape as
+  // AIO); save-lead writes the row immediately, then refreshes its share_url
+  // when the pipeline finishes.
+  const handleSubmit = useCallback(async (email: string, org: string, userInput: string) => {
     setPhase('processing')
     setProgressStep('Resolving brand…')
     setError(null)
@@ -85,6 +88,21 @@ export default function MobileApp() {
       setProgressStep('Discovering competitors…')
       const sessionId = crypto.randomUUID()
       setJobId(sessionId)
+
+      // Persist the lead immediately so capture is decoupled from pipeline
+      // success. Best-effort; the column adds don't block the analysis.
+      fetch('/.netlify/functions/mobile-save-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          email,
+          orgName: org,
+          brandName: userInput,
+          brandDomain: brand_domain,
+          ...(campaignSlug ? { campaignSlug } : {}),
+        }),
+      }).catch(() => { /* best effort */ })
 
       const dispatchRes = await fetch('/.netlify/functions/mobile-submit', {
         method: 'POST',
