@@ -80,10 +80,29 @@
 .ccr-m-intake-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   width: 100%;
   max-width: 320px;
   margin-top: 8px;
+}
+
+/* Per-field row used by the normalized landing form (email → org → brand). */
+.ccr-m-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ccr-m-field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ccr-m-intake-privacy {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 4px 0 0;
+  line-height: 1.4;
 }
 
 .ccr-m-input {
