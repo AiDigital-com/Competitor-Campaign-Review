@@ -2,7 +2,7 @@
  * Mobile report — 3 KPI tiles + campaign cards with creative carousel.
  * Progressive: shields show loading state per section, thin dividers between.
  */
-import { KpiTile, StatusBadge, AssetPreview, SectionDivider, ReportBlock } from '@AiDigital-com/design-system-client'
+import { KpiTile, StatusBadge, AssetPreview, Separator, ReportBlock } from '@AiDigital-com/design-system-client'
 import type { CampaignData, CreativeData } from '../../lib/types'
 
 interface Props {
@@ -110,7 +110,7 @@ export function MobileReport({ data, onViewFullReport, loadingFullReport }: Prop
       </div>
 
       {/* ── Executive Summary ────────────────────────────────── */}
-      <SectionDivider label="Executive Summary" />
+      <Separator label="Executive Summary" />
       <ReportBlock
         status={hasInsights ? 'ready' : 'loading'}
         loadingLabel="Generating insights…"
@@ -121,7 +121,7 @@ export function MobileReport({ data, onViewFullReport, loadingFullReport }: Prop
       </ReportBlock>
 
       {/* ── Top Campaigns ────────────────────────────────────── */}
-      <SectionDivider label="Top Campaigns" />
+      <Separator label="Top Campaigns" />
       <ReportBlock
         status={hasCampaigns ? 'ready' : hasVerified ? 'loading' : 'loading'}
         loadingLabel={hasVerified ? 'Filtering campaigns…' : 'Discovering competitors…'}

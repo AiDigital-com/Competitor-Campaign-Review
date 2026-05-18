@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { PrintLayout } from '@AiDigital-com/design-system-client';
-import type { SupabaseClient } from '@AiDigital-com/design-system-client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { App as ReportApp } from './report-redesign/App';
 import { normalize } from './report-redesign/data';
 import type { RawCcrReportData } from './report-redesign/types';

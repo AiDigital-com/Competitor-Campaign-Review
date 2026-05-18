@@ -9,17 +9,10 @@
  * 5. On complete, MicroReport renders the 6-variant redesign.
  */
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react'
-import {
-  AppShell,
-  ChatPanel,
-  Sidebar,
-  UploadZone,
-  useOrchestrator,
-  useFileUpload,
-  useJobStatus,
-  useSessionPersistence,
-} from '@AiDigital-com/design-system-client'
-import type { SupabaseClient, SidebarItem } from '@AiDigital-com/design-system-client'
+import { AppShell, ChatPanel, Sidebar, UploadZone, useOrchestrator } from '@AiDigital-com/design-system-client'
+import { useFileUpload, useJob as useJobStatus, useSessionPersistence } from '@AiDigital-com/design-system-sdk/react'
+import type { SidebarItem } from '@AiDigital-com/design-system-client'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@supabase/supabase-js'
 import { SignIn, UserButton, useAuth } from '@clerk/react'
 import { MicroReport } from './components/micro-report/MicroReport'
