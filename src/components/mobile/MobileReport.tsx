@@ -2,7 +2,7 @@
  * Mobile report — 3 KPI tiles + campaign cards with creative carousel.
  * Progressive: shields show loading state per section, thin dividers between.
  */
-import { KpiTile, StatusBadge, AssetPreview, SectionDivider, ReportBlock } from '@AiDigital-com/design-system'
+import { KpiTile, StatusBadge, AssetPreview, SectionDivider, ReportBlock } from '@AiDigital-com/design-system-client'
 import type { CampaignData, CreativeData } from '../../lib/types'
 
 interface Props {
@@ -137,7 +137,7 @@ export function MobileReport({ data, onViewFullReport, loadingFullReport }: Prop
                 <div key={comp.domain} className="ccr-m-card">
                   <div className="ccr-m-card-header">
                     <span className="ccr-m-card-domain">{comp.domain}</span>
-                    {isBrand && <span className="aidl-status-badge aidl-status-badge--info">Brand</span>}
+                    {isBrand && <span className="helix-status-badge helix-status-badge--info">Brand</span>}
                   </div>
                   <div className="ccr-m-card-metrics">
                     <span>{fmtNumber(comp.totalImpressions)} imps</span>

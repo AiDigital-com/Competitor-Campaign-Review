@@ -10,7 +10,7 @@ import {
   ShieldMatrix,
   ShieldPublisherList,
   ShieldLandingGrid,
-} from '@AiDigital-com/design-system';
+} from '@AiDigital-com/design-system-client';
 import type { CCRData, Variant, Mode, Theme, FX } from './types';
 
 // ReportTopbar's sharing/download configs live in the d.ts but aren't

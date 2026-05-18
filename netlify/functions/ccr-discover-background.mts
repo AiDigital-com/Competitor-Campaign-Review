@@ -4,7 +4,7 @@
  * Output: candidate domains with summary metrics → inserts ccr_verify task.
  */
 import type { Config } from '@netlify/functions';
-import { createLLMProvider } from '@AiDigital-com/design-system/server';
+import { createLLMProvider } from '@AiDigital-com/design-system-sdk/server';
 import { getCompetitorDomains } from './_shared/dataforseo.js';
 import { discoverAdCompetitors, getAdSummary, getCampaignDetail } from './_shared/bigquery.js';
 import { getSupabase, mergeReportData, setStep, insertTasks, markError, APP_NAME } from './_shared/pipeline.js';
@@ -65,8 +65,8 @@ export default async (req: Request) => {
 
     // Track DataForSeo API cost
     if (seoDomains.length > 0) {
-      const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
-      const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+      const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system-sdk/server');
+      const { getUserOrgId } = await import('@AiDigital-com/design-system-sdk/server');
       const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
       logTokenUsage(supabase as any, {
         userId, orgId, app: 'competitor-campaign-review:dataforseo', source: detectSource(userId),

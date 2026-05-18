@@ -5,7 +5,7 @@
  * Marks pipeline complete.
  */
 import type { Config } from '@netlify/functions';
-import { createLLMProvider } from '@AiDigital-com/design-system/server';
+import { createLLMProvider } from '@AiDigital-com/design-system-sdk/server';
 import {
   getSupabase, mergeReportData, setStep, markComplete, markError,
   APP_NAME, SESSION_TABLE,

@@ -3,7 +3,7 @@
  * Returns structured report_data (visual) + synthesized markdown summary.
  */
 import { createClient } from '@supabase/supabase-js';
-import { validateApiKey, logApiRequest, apiKeyErrorResponse } from '@AiDigital-com/design-system/server';
+import { validateApiKey, logApiRequest, apiKeyErrorResponse } from '@AiDigital-com/design-system-sdk/server';
 import { APP_NAME } from './_shared/pipeline.js';
 
 function getSupabase() {

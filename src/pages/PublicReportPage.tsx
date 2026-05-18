@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { downloadVisualPDF } from '@AiDigital-com/design-system/utils';
+import { downloadVisualPDF } from '@AiDigital-com/design-system-client';
 import { MicroReport } from '../components/micro-report/MicroReport';
 import type { CcrReportData } from '../lib/types';
 
@@ -61,15 +61,15 @@ export function PublicReportPage() {
   // Add pdf-mode class for PDFShift rendering
   useEffect(() => {
     const isPdf = new URLSearchParams(window.location.search).get('pdf-mode') === '1';
-    if (isPdf) document.body.classList.add('aidl-pdf-mode');
-    return () => document.body.classList.remove('aidl-pdf-mode');
+    if (isPdf) document.body.classList.add('helix-pdf-mode');
+    return () => document.body.classList.remove('helix-pdf-mode');
   }, []);
 
   // Report height for iframe auto-sizing
   useEffect(() => {
     if (window.parent !== window) {
       const reportHeight = () => {
-        window.parent.postMessage({ type: 'aidl-report-height', height: document.body.scrollHeight }, '*');
+        window.parent.postMessage({ type: 'helix-report-height', height: document.body.scrollHeight }, '*');
       };
       reportHeight();
       const observer = new ResizeObserver(reportHeight);
@@ -80,16 +80,16 @@ export function PublicReportPage() {
 
   if (state === 'loading') {
     return (
-      <div className="aidl-auth-gate">
-        <div className="aidl-auth-gate__brand">Loading Report...</div>
+      <div className="helix-auth-gate">
+        <div className="helix-auth-gate__brand">Loading Report...</div>
       </div>
     );
   }
 
   if (state === 'error') {
     return (
-      <div className="aidl-status-page">
-        <div className="aidl-status-page__icon">🔒</div>
+      <div className="helix-status-page">
+        <div className="helix-status-page__icon">🔒</div>
         <h2>Report Unavailable</h2>
         <p>{errorMsg}</p>
       </div>

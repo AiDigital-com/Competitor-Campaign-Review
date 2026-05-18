@@ -3,7 +3,7 @@
  * If campaignSlug provided, atomically claims a use before dispatching.
  */
 import { createClient } from '@supabase/supabase-js';
-import { createDispatchHandler } from '@AiDigital-com/design-system/server';
+import { createDispatchHandler } from '@AiDigital-com/design-system-sdk/server';
 
 const dispatchHandler = createDispatchHandler({
   app: 'competitor-campaign-review',

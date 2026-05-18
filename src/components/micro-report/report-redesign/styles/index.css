@@ -7,14 +7,14 @@
  * the CCR-specific styles on top.
  *
  * Order matters:
- *  1. DS report-visual.css — shell chrome + aidl-sweep-* classes
+ *  1. DS report-visual.css — shell chrome + helix-sweep-* classes
  *  2. 1-styles.css         — CCR primitives (host badge, mix bar, creative card, etc.)
  *  3. 3-animations.css     — entrance keyframes (prototype-local)
  *  4. 4-fx.css             — ambient FX (data-fx="neuro")
  *  5. 5-fx-showcase.css    — showcase layer (stacks on neuro)
  *  6. 6-fx-ccr.css         — CCR-local FX hooks (grid, shimmer)
  */
-@import '@AiDigital-com/design-system/report-visual.css';
+@import '@AiDigital-com/design-system-client/report-visual.css';
 @import './1-styles.css';
 @import './3-animations.css';
 @import './4-fx.css';

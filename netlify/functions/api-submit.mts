@@ -3,7 +3,7 @@
  * a competitor campaign review via X-API-Key auth.
  */
 import { createClient } from '@supabase/supabase-js';
-import { validateApiKey, logApiRequest, apiKeyErrorResponse } from '@AiDigital-com/design-system/server';
+import { validateApiKey, logApiRequest, apiKeyErrorResponse } from '@AiDigital-com/design-system-sdk/server';
 import { APP_NAME } from './_shared/pipeline.js';
 
 function getSupabase() {

@@ -78,9 +78,9 @@ export default async (req: Request) => {
     // not token_usage). Firecrawl is page-billed, not token-billed.
     if (landingPages.length > 0) {
       try {
-        const { logExternalApiUsage } = await import('@AiDigital-com/design-system/server');
-        const { detectSource } = await import('@AiDigital-com/design-system/logger');
-        const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+        const { logExternalApiUsage } = await import('@AiDigital-com/design-system-sdk/server');
+        const { detectSource } = await import('@AiDigital-com/design-system-sdk/server');
+        const { getUserOrgId } = await import('@AiDigital-com/design-system-sdk/server');
         const orgId = await getUserOrgId(supabase as any, userId).catch(() => null);
         await logExternalApiUsage({
           supabase: supabase as any,

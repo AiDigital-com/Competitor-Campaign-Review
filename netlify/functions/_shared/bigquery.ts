@@ -52,9 +52,9 @@ const DATE_FILTER = `month >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MON
 /** Track BQ query as API cost (1 unit per query). Fire-and-forget. */
 async function trackBQUsage(queryName: string, userId?: string): Promise<void> {
   try {
-    const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
+    const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system-sdk/server');
     const sb = getSupabase();
-    const { getUserOrgId } = await import('@AiDigital-com/design-system/access');
+    const { getUserOrgId } = await import('@AiDigital-com/design-system-sdk/server');
     const uid = userId || 'system';
     const orgId = await getUserOrgId(sb as any, uid).catch(() => null);
     logTokenUsage(sb as any, {

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import {
   Shield,
   ShieldCreativeGrid,
-} from '@AiDigital-com/design-system';
+} from '@AiDigital-com/design-system-client';
 import type { CCRData, Variant } from '../types';
 import {
   fmtCurrency,

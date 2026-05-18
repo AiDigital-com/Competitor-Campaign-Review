@@ -5,7 +5,7 @@
  * Output: verified domains + selected campaigns → inserts 3 parallel tasks.
  */
 import type { Config } from '@netlify/functions';
-import { createLLMProvider } from '@AiDigital-com/design-system/server';
+import { createLLMProvider } from '@AiDigital-com/design-system-sdk/server';
 import { getSupabase, mergeReportData, setStep, insertTasks, markError, APP_NAME } from './_shared/pipeline.js';
 import { getCampaignDetail } from './_shared/bigquery.js';
 import { log } from './_shared/logger.js';

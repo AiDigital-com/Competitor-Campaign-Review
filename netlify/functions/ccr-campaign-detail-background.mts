@@ -8,7 +8,7 @@
  * 4. Recalculate metrics from filtered set, write to report_data
  */
 import type { Config } from '@netlify/functions';
-import { createLLMProvider } from '@AiDigital-com/design-system/server';
+import { createLLMProvider } from '@AiDigital-com/design-system-sdk/server';
 import { getAdSummary, getCampaignDetailFull, getCreativesForCampaigns } from './_shared/bigquery.js';
 import {
   getSupabase, mergeReportData, setStep, insertTasks,

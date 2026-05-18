@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { BrandMark, ThemeToggle, ProgressBar } from '@AiDigital-com/design-system'
+import { BrandMark, ThemeToggle, ProgressBar } from '@AiDigital-com/design-system-client'
 import { MobileIntake } from '../components/mobile/MobileIntake'
 import { MobileReport } from '../components/mobile/MobileReport'
 import '../ccr-mobile.css'

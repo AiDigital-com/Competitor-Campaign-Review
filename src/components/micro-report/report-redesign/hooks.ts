@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVariantSweep as useDSVariantSweep } from '@AiDigital-com/design-system';
+import { useVariantSweep as useDSVariantSweep } from '@AiDigital-com/design-system-client';
 
 /**
  * useLocalStorage — sync a piece of state with localStorage.
@@ -105,13 +105,13 @@ export function useVariantSweep(variant: string, order: readonly string[]) {
       if (!sweep.direction) return '';
       if (v === sweep.exitingVariant) {
         return sweep.direction === 'right'
-          ? 'aidl-sweep-exit-left'
-          : 'aidl-sweep-exit-right';
+          ? 'helix-sweep-exit-left'
+          : 'helix-sweep-exit-right';
       }
       if (v === variant) {
         return sweep.direction === 'right'
-          ? 'aidl-sweep-enter-from-right'
-          : 'aidl-sweep-enter-from-left';
+          ? 'helix-sweep-enter-from-right'
+          : 'helix-sweep-enter-from-left';
       }
       return '';
     },

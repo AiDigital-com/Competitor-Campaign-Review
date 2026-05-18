@@ -2,7 +2,7 @@
  * Scheduled function: claims and executes CCR pipeline tasks.
  * Runs every minute, loops for 55s.
  */
-import { getAppUrl } from '@AiDigital-com/design-system/utils';
+import { getAppUrl } from '@AiDigital-com/design-system-client';
 
 export default async (req: Request) => {
   const siteUrl = getAppUrl('competitor-campaign-review', { serverUrl: process.env.URL });

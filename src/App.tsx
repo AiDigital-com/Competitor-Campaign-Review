@@ -18,8 +18,8 @@ import {
   useFileUpload,
   useJobStatus,
   useSessionPersistence,
-} from '@AiDigital-com/design-system'
-import type { SupabaseClient, SidebarItem } from '@AiDigital-com/design-system'
+} from '@AiDigital-com/design-system-client'
+import type { SupabaseClient, SidebarItem } from '@AiDigital-com/design-system-client'
 import { createClient } from '@supabase/supabase-js'
 import { SignIn, UserButton, useAuth } from '@clerk/react'
 import { MicroReport } from './components/micro-report/MicroReport'
@@ -334,7 +334,7 @@ function AppContent({
       {!dispatched && (
         <ChatPanel
           messages={orchestrator.messages}
-          streaming={orchestrator.streaming}
+          isStreaming={orchestrator.streaming}
           error={error ?? orchestrator.error}
           onSend={handleSend}
           asset={imageUpload.result}

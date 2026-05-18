@@ -2,7 +2,7 @@
  * CCR task worker — uses shared DS handler.
  * Routes pipeline_tasks to the correct background function.
  */
-import { createTaskWorker } from '@AiDigital-com/design-system/server';
+import { createTaskWorker } from '@AiDigital-com/design-system-sdk/server';
 
 export default createTaskWorker({
   app: 'competitor-campaign-review',

@@ -1,4 +1,4 @@
-import { checkAccess, recordUsage, getUserOrgId } from '@AiDigital-com/design-system/access';
+import { checkAccess, recordUsage, getUserOrgId } from '@AiDigital-com/design-system-sdk/server';
 import { supabase } from './supabase.js';
 
 export async function enforceAccess(userId: string, app: string) {

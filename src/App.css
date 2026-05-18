@@ -1,7 +1,7 @@
 /* CCR app-specific styles.
    Design system provides base styles via style.css.
    All colors via CSS variables — never hardcoded.
-   All report components use DS classes (aidl-*). */
+   All report components use DS classes (helix-*). */
 
 /* ── Report page layout ────────────────────────────────────────────────────── */
 .ccr-report-page {

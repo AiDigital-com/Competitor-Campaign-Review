@@ -3,7 +3,7 @@
  * Uses DS handleApiStatus for standardized response shape.
  */
 import { createClient } from '@supabase/supabase-js';
-import { handleApiStatus } from '@AiDigital-com/design-system/server';
+import { handleApiStatus } from '@AiDigital-com/design-system-sdk/server';
 import { APP_NAME } from './_shared/pipeline.js';
 
 function getSupabase() {

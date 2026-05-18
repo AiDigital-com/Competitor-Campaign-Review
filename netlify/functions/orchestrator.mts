@@ -7,7 +7,7 @@
  *
  * All LLM calls go through createLLMProvider (DS wrapper). Never use @google/genai directly.
  */
-import { createLLMProvider, type ToolDefinition, type ToolCall, type ChatMessage } from '@AiDigital-com/design-system/server';
+import { createLLMProvider, type ToolDefinition, type ToolCall, type ChatMessage } from '@AiDigital-com/design-system-sdk/server';
 import { requireAuthOrEmbed } from './_shared/auth.js';
 import { log } from './_shared/logger.js';
 import { createClient } from '@supabase/supabase-js';

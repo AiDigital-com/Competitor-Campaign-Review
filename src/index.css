@@ -17,7 +17,7 @@ a { color: inherit; text-decoration: none; }
 * { scrollbar-width: thin; }
 
 /* ── Sidebar ─────────────────────────────────────────
-   IMPORTANT: The DS uses aidl-sidebar prefix internally.
+   IMPORTANT: The DS uses helix-sidebar prefix internally.
    Apps must include these local .sidebar classes for the
    custom sidebar component to render correctly.
    ──────────────────────────────────────────────────── */

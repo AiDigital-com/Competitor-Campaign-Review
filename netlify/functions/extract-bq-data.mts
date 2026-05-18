@@ -285,7 +285,7 @@ export default async (req: Request) => {
   console.log('[extract] Results:', JSON.stringify(results));
 
   try {
-    const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system/logger');
+    const { logTokenUsage, detectSource } = await import('@AiDigital-com/design-system-sdk/server');
     logTokenUsage(sb as any, {
       userId: 'system', orgId: null,
       app: 'competitor-campaign-review:bq-extract',

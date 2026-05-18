@@ -3,7 +3,7 @@
  * No confirmation, no chat. Single LLM call → tool call → done.
  * Anonymous access via X-Mobile-Source header.
  */
-import { createLLMProvider, type ToolDefinition, type ToolCall } from '@AiDigital-com/design-system/server';
+import { createLLMProvider, type ToolDefinition, type ToolCall } from '@AiDigital-com/design-system-sdk/server';
 import { createClient } from '@supabase/supabase-js';
 
 const APP_NAME = 'competitor-campaign-review';

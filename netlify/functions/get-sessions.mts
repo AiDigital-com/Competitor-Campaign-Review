@@ -1,6 +1,6 @@
 import type { Context } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { requireAuth } from '@AiDigital-com/design-system/server';
+import { requireAuth } from '@AiDigital-com/design-system-sdk/server';
 
 export default async (req: Request, _context: Context) => {
   if (req.method !== 'GET') {

@@ -6,7 +6,7 @@
  */
 import type { Context } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { mergeSession } from '@AiDigital-com/design-system/server';
+import { mergeSession } from '@AiDigital-com/design-system-sdk/server';
 
 // TODO: Change to your session table name
 const SESSION_TABLE = 'ccr_sessions';

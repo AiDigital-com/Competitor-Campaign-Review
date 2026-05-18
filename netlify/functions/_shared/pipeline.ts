@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getAppUrl } from '@AiDigital-com/design-system/utils';
+import { getAppUrl } from '@AiDigital-com/design-system-client';
 
 export const APP_NAME = 'competitor-campaign-review';
 export const SESSION_TABLE = 'ccr_sessions';
